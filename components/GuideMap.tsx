@@ -37,6 +37,13 @@ const defaultZoom = 10;
 const LIBRARIES: ("marker")[] = ['marker'];
 
 export default function GuideMap({ locations, isActive, onLocationClick, company }: GuideMapProps) {
+  console.log('🗺️ GuideMap rendered with locations:', locations?.length, 'isActive:', isActive);
+  console.log('🗺️ GuideMap locations type:', typeof locations, 'isArray?', Array.isArray(locations), 'constructor:', locations?.constructor?.name);
+  if (locations && locations.length > 0) {
+    console.log('🗺️ First location:', locations[0]);
+    console.log('🗺️ First location type:', typeof locations[0]);
+  }
+  
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const regularMarkersRef = useRef<google.maps.Marker[]>([]);
@@ -65,20 +72,32 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
 
   // Calculate map bounds to fit all locations and company pin
   const mapOptions = useMemo(() => {
+    console.log('🗺️ mapOptions useMemo called, locations:', locations);
+    console.log('🗺️ mapOptions - locations type:', typeof locations, 'isArray?', Array.isArray(locations));
+    
     const allLatitudes: number[] = [];
     const allLongitudes: number[] = [];
 
     // Add company coordinates if available
     if (company?.coordinates) {
-      allLatitudes.push(company.coordinates.lat);
-      allLongitudes.push(company.coordinates.lng);
+      allLatitudes.push(company.coordinates!.lat);
+      allLongitudes.push(company.coordinates!.lng);
     }
 
     // Add location coordinates
-    locations.forEach(loc => {
-      allLatitudes.push(loc.coordinates.lat);
-      allLongitudes.push(loc.coordinates.lng);
-    });
+    try {
+      console.log('🗺️ About to call locations.forEach, locations:', locations);
+      locations.forEach((loc, index) => {
+        console.log(`🗺️ Processing location ${index}:`, loc);
+        console.log(`🗺️ Location ${index} coordinates:`, loc.coordinates);
+        allLatitudes.push(loc.coordinates.lat);
+        allLongitudes.push(loc.coordinates.lng);
+      });
+    } catch (error) {
+      console.error('❌ Error in locations.forEach:', error);
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack');
+      throw error;
+    }
 
     if (allLatitudes.length === 0) {
       return {
@@ -112,11 +131,16 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
 
   // Create and update markers
   useEffect(() => {
+    console.log('🗺️ Marker creation useEffect triggered');
+    console.log('🗺️ Marker useEffect - isLoaded:', isLoaded, 'mapRef.current:', !!mapRef.current, 'mapReady:', mapReady, 'isActive:', isActive);
+    
     if (!isLoaded || !mapRef.current || !mapReady || !isActive) {
+      console.log('🗺️ Marker useEffect - early return');
       return;
     }
 
     if (locations.length === 0) {
+      console.log('🗺️ Marker useEffect - no locations, clearing markers');
       markersRef.current.forEach(marker => marker.map = null);
       markersRef.current = [];
       regularMarkersRef.current.forEach(marker => marker.setMap(null));
@@ -124,22 +148,38 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
       return;
     }
 
+    console.log('🗺️ Marker useEffect - creating markers for', locations.length, 'locations');
+    
     const map = mapRef.current;
-    const getMapIdFunc = map && 'getMapId' in map ? (map as any).getMapId : undefined;
-    const hasMapId = !!mapId || !!(getMapIdFunc && typeof getMapIdFunc === 'function' && getMapIdFunc());
-    const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapId;
+    if (!map) {
+      console.log('🗺️ Marker useEffect - map not available, returning');
+      return;
+    }
+    
+    console.log('🗺️ Marker useEffect - map:', map, 'type:', typeof map);
+    
+    try {
+      // Check for mapId - only use env var to avoid calling getMapId which causes context issues
+      // The getMapId() method has context issues when called, so we'll just rely on the env var
+      const hasMapId = !!mapId;
+      console.log('🗺️ Marker useEffect - hasMapId:', hasMapId);
+      const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapId;
+      console.log('🗺️ Marker useEffect - hasAdvancedMarkerSupport:', hasAdvancedMarkerSupport);
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.map = null);
-    markersRef.current = [];
-    regularMarkersRef.current.forEach(marker => marker.setMap(null));
-    regularMarkersRef.current = [];
+      // Clear existing markers
+      console.log('🗺️ Marker useEffect - clearing existing markers');
+      markersRef.current.forEach(marker => marker.map = null);
+      markersRef.current = [];
+      regularMarkersRef.current.forEach(marker => marker.setMap(null));
+      regularMarkersRef.current = [];
 
-    if (!hasAdvancedMarkerSupport) {
-      setUseAdvancedMarkers(false);
-      
-      locations.forEach((location) => {
-        try {
+      if (!hasAdvancedMarkerSupport) {
+        console.log('🗺️ Marker useEffect - using regular markers');
+        setUseAdvancedMarkers(false);
+        
+        locations.forEach((location, index) => {
+          console.log(`🗺️ Creating regular marker ${index} for location:`, location.name);
+          try {
           const marker = new google.maps.Marker({
             map: map,
             position: {
@@ -164,42 +204,53 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
           });
 
           regularMarkersRef.current.push(marker);
-        } catch (error: any) {
-          console.error('Error creating marker:', error);
-        }
-      });
-    } else {
-      setUseAdvancedMarkers(true);
+          } catch (error: any) {
+            console.error(`❌ Error creating marker ${index}:`, error);
+            console.error('❌ Error stack:', error?.stack);
+            throw error;
+          }
+        });
+      } else {
+        console.log('🗺️ Marker useEffect - using advanced markers');
+        setUseAdvancedMarkers(true);
 
-      locations.forEach((location) => {
-        try {
-          const marker = new google.maps.marker.AdvancedMarkerElement({
-            map: map,
-            position: {
-              lat: location.coordinates.lat,
-              lng: location.coordinates.lng,
-            },
-            title: location.name,
-          });
+        locations.forEach((location, index) => {
+          console.log(`🗺️ Creating advanced marker ${index} for location:`, location.name);
+          try {
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+              map: map,
+              position: {
+                lat: location.coordinates.lat,
+                lng: location.coordinates.lng,
+              },
+              title: location.name,
+            });
 
-          marker.addListener('click', () => {
-            if (onLocationClick) {
-              onLocationClick(location);
-            }
-          });
+            marker.addListener('click', () => {
+              if (onLocationClick) {
+                onLocationClick(location);
+              }
+            });
 
-          markersRef.current.push(marker);
-        } catch (error: any) {
-          console.error('Error creating advanced marker:', error);
-        }
-      });
+            markersRef.current.push(marker);
+          } catch (error: any) {
+            console.error(`❌ Error creating advanced marker ${index}:`, error);
+            console.error('❌ Error stack:', error?.stack);
+            throw error;
+          }
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Fatal error in marker creation useEffect:', error);
+      console.error('❌ Error stack:', error?.stack);
+      throw error;
     }
 
     // Create company pin marker if coordinates are available
     if (company?.coordinates) {
-      const getMapIdFunc = map && 'getMapId' in map ? (map as any).getMapId : undefined;
-      const hasMapId = !!mapId || !!(getMapIdFunc && typeof getMapIdFunc === 'function' && getMapIdFunc());
-      const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapId;
+      // Check for mapId - only use env var to avoid calling getMapId which causes context issues
+      const hasMapIdForCompany = !!mapId;
+      const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapIdForCompany;
 
       // Clear existing company marker
       if (companyMarkerRef.current) {
@@ -241,13 +292,13 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
           };
           logoElement.appendChild(img);
 
-          const marker = new google.maps.marker.AdvancedMarkerElement({
-            map: map,
-            position: {
-              lat: company.coordinates.lat,
-              lng: company.coordinates.lng,
-            },
-            title: company.name,
+              const marker = new google.maps.marker.AdvancedMarkerElement({
+                map: map,
+                position: {
+                  lat: company.coordinates!.lat,
+                  lng: company.coordinates!.lng,
+                },
+                title: company.name,
             content: logoElement,
             zIndex: 1000, // Higher z-index to appear above other markers
           });
@@ -328,8 +379,8 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
               const marker = new google.maps.Marker({
                 map: map,
                 position: {
-                  lat: company.coordinates.lat,
-                  lng: company.coordinates.lng,
+                  lat: company.coordinates!.lat,
+                  lng: company.coordinates!.lng,
                 },
                 title: company.name,
                 icon: {
@@ -348,8 +399,8 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
               const marker = new google.maps.Marker({
                 map: map,
                 position: {
-                  lat: company.coordinates.lat,
-                  lng: company.coordinates.lng,
+                  lat: company.coordinates!.lat,
+                  lng: company.coordinates!.lng,
                 },
                 title: company.name,
                 icon: {
@@ -376,8 +427,8 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
     // Add company coordinates to bounds
     if (company?.coordinates) {
       bounds.extend({
-        lat: company.coordinates.lat,
-        lng: company.coordinates.lng,
+        lat: company.coordinates!.lat,
+        lng: company.coordinates!.lng,
       });
     }
     
@@ -463,29 +514,42 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
     );
   }
 
-  return (
-    <GoogleMap
-      mapContainerStyle={mapContainerStyle}
-      center={mapOptions.center}
-      zoom={mapOptions.center === defaultCenter ? defaultZoom : undefined}
-      onLoad={onLoad}
-      onUnmount={onUnmount}
-      options={{
-        disableDefaultUI: true,
-        zoomControl: true,
-        streetViewControl: false,
-        mapTypeControl: false,
-        fullscreenControl: false,
-        mapId: mapId || undefined,
-        styles: [
-          {
-            featureType: 'all',
-            elementType: 'labels',
-            stylers: [{ visibility: 'off' }],
-          },
-        ],
-      }}
-    />
-  );
+  console.log('🗺️ Rendering GoogleMap with mapOptions:', mapOptions);
+  
+  try {
+    return (
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
+        center={mapOptions.center}
+        zoom={mapOptions.center === defaultCenter ? defaultZoom : undefined}
+        onLoad={onLoad}
+        onUnmount={onUnmount}
+        options={{
+          disableDefaultUI: true,
+          zoomControl: true,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+          mapId: mapId || undefined,
+          styles: [
+            {
+              featureType: 'all',
+              elementType: 'labels',
+              stylers: [{ visibility: 'off' }],
+            },
+          ],
+        }}
+      />
+    );
+  } catch (error: any) {
+    console.error('❌ Error rendering GoogleMap:', error);
+    console.error('❌ Error stack:', error?.stack);
+    return (
+      <div className="w-full h-full bg-black flex flex-col items-center justify-center text-white p-4">
+        <p className="text-red-400 font-bold mb-2">Error rendering map</p>
+        <p className="text-sm text-center">{error?.message || 'Unknown error'}</p>
+      </div>
+    );
+  }
 }
 

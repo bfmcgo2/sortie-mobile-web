@@ -194,6 +194,7 @@ export async function fetchCompanyGuideLocations(companyId: string, locationIds:
 
   // Get unique video IDs from the locations
   const videoIds = [...new Set(locationsData.map((loc: any) => loc.video_id))];
+  console.log('🔍 fetchCompanyGuideLocations - videoIds:', videoIds);
   
   // Fetch video URLs
   const { data: videosData, error: videosError } = await supabase
@@ -206,23 +207,47 @@ export async function fetchCompanyGuideLocations(companyId: string, locationIds:
     return [];
   }
 
-  const videoUrlMap = new Map((videosData || []).map((v: any) => [v.id, convertToPublicUrl(v.video_url)]));
+  console.log('🔍 fetchCompanyGuideLocations - videosData:', videosData);
+  console.log('🔍 fetchCompanyGuideLocations - videosData length:', videosData?.length);
+  
+  const videoUrlMapEntries = (videosData || []).map((v: any) => [v.id, convertToPublicUrl(v.video_url)]);
+  console.log('🔍 fetchCompanyGuideLocations - videoUrlMapEntries:', videoUrlMapEntries);
+  
+  const videoUrlMap = new Map(videoUrlMapEntries);
+  console.log('🔍 fetchCompanyGuideLocations - videoUrlMap created:', videoUrlMap);
+  console.log('🔍 fetchCompanyGuideLocations - videoUrlMap instanceof Map?', videoUrlMap instanceof Map);
+  console.log('🔍 fetchCompanyGuideLocations - videoUrlMap.get exists?', typeof videoUrlMap.get === 'function');
+  console.log('🔍 fetchCompanyGuideLocations - videoUrlMap size:', videoUrlMap.size);
 
   const guideLocations: GuideLocation[] = locationsData
     .filter((loc: any) => loc.name && loc.coordinates) // Only include locations with name and coordinates
-    .map((loc: any) => ({
-      id: loc.id,
-      name: loc.name,
-      location_name: loc.location_name,
-      coordinates: typeof loc.coordinates === 'string' ? JSON.parse(loc.coordinates) : loc.coordinates,
-      time_start_sec: typeof loc.time_start_sec === 'string' ? parseFloat(loc.time_start_sec) : loc.time_start_sec,
-      time_end_sec: loc.time_end_sec ? (typeof loc.time_end_sec === 'string' ? parseFloat(loc.time_end_sec) : loc.time_end_sec) : null,
-      place_id: loc.place_id,
-      mention: loc.mention,
-      context: loc.context,
-      video_id: loc.video_id,
-      video_url: videoUrlMap.get(loc.video_id) || '',
-    }));
+    .map((loc: any) => {
+      console.log('🔍 Processing location:', loc.id, 'video_id:', loc.video_id);
+      try {
+        const videoUrl = videoUrlMap.get(loc.video_id);
+        console.log('🔍 Got video URL for location:', loc.id, 'video_id:', loc.video_id, 'url:', videoUrl);
+        return {
+          id: loc.id,
+          name: loc.name,
+          location_name: loc.location_name,
+          coordinates: typeof loc.coordinates === 'string' ? JSON.parse(loc.coordinates) : loc.coordinates,
+          time_start_sec: typeof loc.time_start_sec === 'string' ? parseFloat(loc.time_start_sec) : loc.time_start_sec,
+          time_end_sec: loc.time_end_sec ? (typeof loc.time_end_sec === 'string' ? parseFloat(loc.time_end_sec) : loc.time_end_sec) : null,
+          place_id: loc.place_id,
+          mention: loc.mention,
+          context: loc.context,
+          video_id: loc.video_id,
+          video_url: videoUrl || '',
+        };
+      } catch (error) {
+        console.error('❌ Error processing location:', loc.id, error);
+        console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack');
+        console.error('❌ videoUrlMap at error:', videoUrlMap);
+        console.error('❌ videoUrlMap type:', typeof videoUrlMap);
+        console.error('❌ videoUrlMap constructor:', videoUrlMap?.constructor?.name);
+        throw error;
+      }
+    });
 
   return guideLocations;
 }

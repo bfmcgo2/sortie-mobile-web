@@ -31,7 +31,7 @@ export default function PhillyPinsPage() {
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const regularMarkersRef = useRef<google.maps.Marker[]>([]);
-  const tooltipRefs = useRef<Map<google.maps.marker.AdvancedMarkerElement, HTMLDivElement>>(new Map());
+  const tooltipRefs = useRef<Map<google.maps.marker.AdvancedMarkerElement, HTMLDivElement>>(new Map<google.maps.marker.AdvancedMarkerElement, HTMLDivElement>());
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const videoContainerRefs = useRef<(HTMLDivElement | null)[]>([]);
   const touchStartY = useRef(0);
@@ -145,17 +145,28 @@ export default function PhillyPinsPage() {
         try {
           marker.map = null;
           // Remove tooltip if it exists
-          const tooltip = tooltipRefs.current.get(marker);
-          if (tooltip && tooltip.parentNode) {
-            tooltip.parentNode.removeChild(tooltip);
+          console.log('🔍 Clearing marker, tooltipRefs.current type:', typeof tooltipRefs.current, 'is Map?', tooltipRefs.current instanceof Map);
+          if (tooltipRefs.current) {
+            console.log('🔍 Attempting to get tooltip for marker');
+            const tooltip = tooltipRefs.current.get(marker);
+            console.log('🔍 Got tooltip:', tooltip);
+            if (tooltip && tooltip.parentNode) {
+              tooltip.parentNode.removeChild(tooltip);
+            }
+            tooltipRefs.current.delete(marker);
           }
-          tooltipRefs.current.delete(marker);
         } catch (e) {
-          console.error('Error clearing advanced marker:', e);
+          console.error('❌ Error clearing advanced marker:', e);
+          console.error('❌ Error stack:', e.stack);
+          console.error('❌ tooltipRefs.current:', tooltipRefs.current);
+          console.error('❌ tooltipRefs.current type:', typeof tooltipRefs.current);
+          console.error('❌ tooltipRefs.current constructor:', tooltipRefs.current?.constructor?.name);
         }
       });
       markersRef.current = [];
-      tooltipRefs.current.clear();
+      if (tooltipRefs.current) {
+        tooltipRefs.current.clear();
+      }
       
       regularMarkersRef.current.forEach(marker => {
         try {
@@ -214,7 +225,14 @@ export default function PhillyPinsPage() {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
               `;
               document.body.appendChild(tooltip);
+              console.log('🔍 Setting up tooltip, tooltipRefs.current before:', tooltipRefs.current, 'type:', typeof tooltipRefs.current);
+              if (!tooltipRefs.current) {
+                console.log('🔍 Initializing new Map for tooltipRefs');
+                tooltipRefs.current = new Map<google.maps.marker.AdvancedMarkerElement, HTMLDivElement>();
+              }
+              console.log('🔍 Setting tooltip in Map, marker:', marker, 'tooltip:', tooltip);
               tooltipRefs.current.set(marker, tooltip);
+              console.log('🔍 Tooltip set successfully, Map size:', tooltipRefs.current.size);
 
               // Position and show tooltip on hover
               const updateTooltipPosition = (event?: MouseEvent) => {
@@ -231,6 +249,8 @@ export default function PhillyPinsPage() {
                   if (!projection) return;
                   
                   const point = projection.fromLatLngToPoint(position);
+                  if (!point) return;
+                  
                   const scale = Math.pow(2, mapRef.current.getZoom() || 12);
                   const pixelX = point.x * scale;
                   const pixelY = point.y * scale;
