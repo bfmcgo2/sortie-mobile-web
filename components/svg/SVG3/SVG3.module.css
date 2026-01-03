@@ -1,0 +1,124 @@
+.st0{
+    fill-rule:evenodd;
+    clip-rule:evenodd;
+    fill:#49574E;
+}
+.st1{
+    fill:none;
+    stroke:#1C2628;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+            
+.st2{
+    fill-rule:evenodd;
+    clip-rule:evenodd;
+    fill:#F45B49;stroke:#1C2628;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+            
+.st3{
+    fill-rule:evenodd;
+    clip-rule:evenodd;
+    fill:#1C2628;stroke:#1C2628;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+            
+.st4{
+    fill-rule:evenodd;
+    clip-rule:evenodd;
+    fill:#FAF6EB;stroke:#1C2628;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+.st5{
+    fill:#FAF6EB;stroke:#1C2628;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+            
+.st6{
+    fill-rule:evenodd;
+    clip-rule:evenodd;
+    fill:#F3A140;stroke:#1C2628;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+            
+.st7{
+    fill-rule:evenodd;
+    clip-rule:evenodd;
+    fill:#FAFCFF;stroke:#1C2628;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+.st8{
+    fill-rule:evenodd;
+    clip-rule:evenodd;
+    fill:#FAF6EB;
+}
+.st9{
+    fill:none;stroke:#FAF6EB;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+.st10{
+    fill-rule:evenodd;
+    clip-rule:evenodd;
+    fill:#F3A13B;
+}
+.st11{
+    fill:#1C2628;stroke:#1C2628;
+    stroke-width:2.13;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    transform-origin: left;
+}
+.st12{
+    fill:#F55C4A;
+}
+.note1 {
+    animation: note1 2s infinite ease-in-out;
+}
+
+.note2 {
+    animation: note2 4s infinite ease-in-out;
+}
+.note3 {
+    animation: note3 1s infinite ease-in-out;
+}
+
+@keyframes note1 {
+    0%, 100% {
+        transform: translate(1%) ;
+    }
+    50% {
+        transform: translate(0%) ;
+    }
+}
+@keyframes note2 {
+    0%, 100% {
+        transform: translate(1%) ;
+    }
+    50% {
+        transform: translate(0%) ;
+    }
+}
+@keyframes note3 {
+    0%, 100% {
+        transform: translate(2%, -1%) ;
+    }
+    50% {
+        transform: translate(0%) ;
+    }
+}

@@ -1,0 +1,39 @@
+[
+  {
+    "id": "2345023",
+    "name": "The Edwin Hotel",
+    "logo": "/companies/edwinhotel.png",
+    "coordinates": {
+      "lat": 35.05531062949421,
+      "lng": -85.30750497611987
+    }
+  },
+  {
+    "id": "2359870",
+    "name": "Guild House Hotel",
+    "logo": "/companies/guildhouse.png",
+    "coordinates": {
+      "lat": 39.94835129314291,
+      "lng": -75.16266143129708
+    }
+  },
+  {
+    "id": "2405184",
+    "name": "YOWIE Hotel & Shop",
+    "logo": "/companies/yowie.png",
+    "coordinates": {
+      "lat": 39.941111,
+      "lng": -75.146667
+    }
+  },
+  {
+    "id": "2500000",
+    "name": "The Bellevue Hotel",
+    "logo": "/companies/bellevue-hotel-logo.jpg",
+    "coordinates": {
+      "lat": 39.94919649555581,
+      "lng": -75.16506911192916
+    }
+  }
+]
+
