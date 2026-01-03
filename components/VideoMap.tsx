@@ -155,14 +155,15 @@ export default function VideoMap({ currentVideo, isActive, onLocationClick }: Vi
     const map = mapRef.current;
 
     // Check if we should use AdvancedMarkerElement (requires Map ID)
-    const hasMapId = !!mapId || !!map.getMapId?.();
+    const getMapIdFunc = map && 'getMapId' in map ? (map as any).getMapId : undefined;
+    const hasMapId = !!mapId || !!(getMapIdFunc && typeof getMapIdFunc === 'function' && getMapIdFunc());
     const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapId;
 
     console.log('🗺️ Marker support check:', {
       hasMapId,
       hasAdvancedMarkerSupport,
       mapId: mapId || 'not set',
-      actualMapId: map.getMapId?.(),
+      actualMapId: getMapIdFunc && typeof getMapIdFunc === 'function' ? getMapIdFunc() : undefined,
     });
 
     // Clear existing markers

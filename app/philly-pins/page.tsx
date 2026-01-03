@@ -168,7 +168,9 @@ export default function PhillyPinsPage() {
 
       // Check if Advanced Markers are available and if we have a mapId
       const hasAdvancedMarker = !!window.google?.maps?.marker?.AdvancedMarkerElement;
-      const hasMapId = !!mapId || !!mapRef.current.getMapId?.();
+      const map = mapRef.current;
+      const getMapIdFunc = map && 'getMapId' in map ? (map as any).getMapId : undefined;
+      const hasMapId = !!mapId || !!(getMapIdFunc && typeof getMapIdFunc === 'function' && getMapIdFunc());
       const useAdvanced = hasAdvancedMarker && hasMapId;
 
       console.log('📍 Marker type check:', {

@@ -125,7 +125,8 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
     }
 
     const map = mapRef.current;
-    const hasMapId = !!mapId || !!map.getMapId?.();
+    const getMapIdFunc = map && 'getMapId' in map ? (map as any).getMapId : undefined;
+    const hasMapId = !!mapId || !!(getMapIdFunc && typeof getMapIdFunc === 'function' && getMapIdFunc());
     const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapId;
 
     // Clear existing markers
@@ -196,7 +197,8 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
 
     // Create company pin marker if coordinates are available
     if (company?.coordinates) {
-      const hasMapId = !!mapId || !!map.getMapId?.();
+      const getMapIdFunc = map && 'getMapId' in map ? (map as any).getMapId : undefined;
+      const hasMapId = !!mapId || !!(getMapIdFunc && typeof getMapIdFunc === 'function' && getMapIdFunc());
       const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapId;
 
       // Clear existing company marker
