@@ -137,7 +137,7 @@ export async function fetchAllGuideLocations(): Promise<GuideLocation[]> {
   }
 
   const videoIds = videosData.map((v: any) => v.id);
-  const videoUrlMap = new Map(videosData.map((v: any) => [v.id, convertToPublicUrl(v.video_url)]));
+  const videoUrlMap = new Map<string, string>(videosData.map((v: any) => [v.id, convertToPublicUrl(v.video_url)] as [string, string]));
   
   const { data: locationsData, error: locationsError } = await supabase
     .from('locations')
@@ -210,10 +210,10 @@ export async function fetchCompanyGuideLocations(companyId: string, locationIds:
   console.log('🔍 fetchCompanyGuideLocations - videosData:', videosData);
   console.log('🔍 fetchCompanyGuideLocations - videosData length:', videosData?.length);
   
-  const videoUrlMapEntries = (videosData || []).map((v: any) => [v.id, convertToPublicUrl(v.video_url)]);
+  const videoUrlMapEntries = (videosData || []).map((v: any) => [v.id, convertToPublicUrl(v.video_url)] as [string, string]);
   console.log('🔍 fetchCompanyGuideLocations - videoUrlMapEntries:', videoUrlMapEntries);
   
-  const videoUrlMap = new Map(videoUrlMapEntries);
+  const videoUrlMap = new Map<string, string>(videoUrlMapEntries);
   console.log('🔍 fetchCompanyGuideLocations - videoUrlMap created:', videoUrlMap);
   console.log('🔍 fetchCompanyGuideLocations - videoUrlMap instanceof Map?', videoUrlMap instanceof Map);
   console.log('🔍 fetchCompanyGuideLocations - videoUrlMap.get exists?', typeof videoUrlMap.get === 'function');
@@ -306,7 +306,7 @@ export async function fetchPhiladelphiaLocations(): Promise<LocationWithVideos[]
   }
 
   const phillyVideoIds = phillyVideos.map((v: any) => v.id);
-  const videoUrlMap = new Map(phillyVideos.map((v: any) => [v.id, convertToPublicUrl(v.video_url)]));
+  const videoUrlMap = new Map<string, string>(phillyVideos.map((v: any) => [v.id, convertToPublicUrl(v.video_url)] as [string, string]));
 
   // Get all locations from these videos
   const { data: locationsData, error: locationsError } = await supabase

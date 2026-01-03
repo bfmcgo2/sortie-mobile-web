@@ -155,9 +155,9 @@ export default function PhillyPinsPage() {
             }
             tooltipRefs.current.delete(marker);
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error('❌ Error clearing advanced marker:', e);
-          console.error('❌ Error stack:', e.stack);
+          console.error('❌ Error stack:', e?.stack);
           console.error('❌ tooltipRefs.current:', tooltipRefs.current);
           console.error('❌ tooltipRefs.current type:', typeof tooltipRefs.current);
           console.error('❌ tooltipRefs.current constructor:', tooltipRefs.current?.constructor?.name);
@@ -171,7 +171,7 @@ export default function PhillyPinsPage() {
       regularMarkersRef.current.forEach(marker => {
         try {
           marker.setMap(null);
-        } catch (e) {
+        } catch (e: any) {
           console.error('Error clearing regular marker:', e);
         }
       });
