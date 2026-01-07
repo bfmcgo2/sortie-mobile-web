@@ -244,7 +244,7 @@ export default function GuidePage() {
             className={`font-bold text-center ${inter.className}`}
             style={{ color: '#fdf5e2', fontWeight: 700, fontSize: '30px' }}
           >
-            {company?.name ? `${company.name}'s Guide` : 'Guide'}
+            {company?.name ? `${company.name} Guide` : 'Guide'}
           </p>
         </div>
         {/* Map Container - takes remaining space */}
