@@ -125,11 +125,9 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
       {/* Location Name and Address Link */}
       {(location.name || location.location_name) && (
         <div 
-          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-6 pt-6"
+          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-6 pt-6 pb-safe px-safe"
           style={{ 
-            paddingBottom: 'max(2rem, calc(1.5rem + env(safe-area-inset-bottom)))',
-            paddingLeft: 'max(1.5rem, env(safe-area-inset-left))',
-            paddingRight: 'max(1.5rem, env(safe-area-inset-right))'
+            paddingBottom: 'max(2rem, calc(1.5rem + env(safe-area-inset-bottom, 0px)))'
           }}
         >
           <a

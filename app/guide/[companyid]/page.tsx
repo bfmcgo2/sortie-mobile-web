@@ -37,26 +37,6 @@ export default function GuidePage() {
   const [selectedLocation, setSelectedLocation] = useState<GuideLocation | null>(null);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [isMobile, setIsMobile] = useState(true);
-  const [viewportHeight, setViewportHeight] = useState('100vh');
-
-  // Set dynamic viewport height to account for mobile browser UI
-  useEffect(() => {
-    const setHeight = () => {
-      // Use actual window innerHeight for mobile browsers
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
-      setViewportHeight(`${window.innerHeight}px`);
-    };
-    
-    setHeight();
-    window.addEventListener('resize', setHeight);
-    window.addEventListener('orientationchange', setHeight);
-    
-    return () => {
-      window.removeEventListener('resize', setHeight);
-      window.removeEventListener('orientationchange', setHeight);
-    };
-  }, []);
 
   // Check if user is on mobile
   useEffect(() => {
@@ -161,8 +141,8 @@ export default function GuidePage() {
   if (!isMobile) {
     return (
       <div 
-        className={`flex flex-col items-center justify-center w-screen ${inter.className}`}
-        style={{ backgroundColor: '#18204aff', height: viewportHeight }}
+        className={`flex flex-col items-center justify-center h-full-viewport ${inter.className}`}
+        style={{ backgroundColor: '#18204aff' }}
       >
         <p 
           className="text-xl font-bold text-center px-6"
@@ -178,18 +158,18 @@ export default function GuidePage() {
   if (viewState === 'loading') {
     return (
       <div 
-        className={`flex flex-col items-center justify-center w-screen ${inter.className}`}
-        style={{ backgroundColor: '#18204aff', height: viewportHeight }}
+        className={`flex flex-col items-center justify-center h-full-viewport ${inter.className}`}
+        style={{ backgroundColor: '#18204aff' }}
       >
         {/* Company Logo - Only show when company data and image are ready */}
         {company && (
           <div 
-            className="mb-6 rounded-full flex items-center justify-center overflow-hidden"
+            className="mb-8 rounded-full flex items-center justify-center overflow-hidden"
             style={{ 
               backgroundColor: '#fdf5e2',
-              width: '50px',
-              height: '50px',
-              padding: '2px'
+              width: '120px',
+              height: '120px',
+              padding: '4px'
             }}
           >
             {company.logo && (
@@ -211,13 +191,21 @@ export default function GuidePage() {
           </div>
         )}
 
-        {/* Loading Text */}
+        {/* Company Name */}
         <p 
-          className="text-xl font-bold text-center"
+          className="text-2xl font-bold text-center mb-6"
           style={{ color: '#fdf5e2', fontWeight: 700 }}
         >
           {company?.name || 'Company'} Guide
         </p>
+
+        {/* Loading Text with Animated Dots */}
+        <div className="flex items-center justify-center gap-1">
+          <span style={{ color: '#fdf5e2', fontSize: '18px' }}>Loading</span>
+          <span className="loading-dot" style={{ color: '#fdf5e2', fontSize: '18px' }}>.</span>
+          <span className="loading-dot" style={{ color: '#fdf5e2', fontSize: '18px' }}>.</span>
+          <span className="loading-dot" style={{ color: '#fdf5e2', fontSize: '18px' }}>.</span>
+        </div>
         
         {/* SVG2 Loader - Commented out */}
         {/* <div className="mt-4 w-full max-w-xl">
@@ -230,7 +218,7 @@ export default function GuidePage() {
   // Video view
   if (viewState === 'video' && isMobile) {
     return (
-      <div className="w-screen" style={{ height: viewportHeight }}>
+      <div className="h-full-viewport">
         <VideoSegmentPlayer
           location={selectedLocation}
           onClose={handleCloseVideo}
@@ -241,19 +229,15 @@ export default function GuidePage() {
 
   // Map view (default after loading)
   if (isMobile) {
-    // Calculate header height (30px font + 20px padding = ~50px, plus safe area)
-    const headerHeight = 50;
-    
     return (
-      <div className="w-screen relative flex flex-col" style={{ height: viewportHeight }}>
+      <div className="h-full-viewport relative flex flex-col">
         {/* Header Bar */}
         <div 
-          className="flex items-center justify-center z-50 flex-shrink-0"
+          className="flex items-center justify-center z-50 flex-shrink-0 pt-safe"
           style={{ 
             padding: '10px 0',
             backgroundColor: '#18204aff',
-            paddingTop: `max(10px, calc(10px + env(safe-area-inset-top)))`,
-            minHeight: `${headerHeight}px`
+            paddingTop: `max(10px, calc(10px + env(safe-area-inset-top, 0px)))`
           }}
         >
           <p 
@@ -264,7 +248,7 @@ export default function GuidePage() {
           </p>
         </div>
         {/* Map Container - takes remaining space */}
-        <div className="flex-1 relative" style={{ minHeight: 0 }}>
+        <div className="flex-1 relative overflow-hidden" style={{ minHeight: 0 }}>
           <GuideMap
             locations={locations}
             isActive={viewState === 'map'}
@@ -280,8 +264,8 @@ export default function GuidePage() {
   if (!companyId) {
     return (
       <div 
-        className={`flex flex-col items-center justify-center w-screen ${inter.className}`}
-        style={{ backgroundColor: '#18204aff', color: '#fdf5e2', height: viewportHeight }}
+        className={`flex flex-col items-center justify-center h-full-viewport ${inter.className}`}
+        style={{ backgroundColor: '#18204aff', color: '#fdf5e2' }}
       >
         <p className="text-xl font-bold text-center">
           Company ID not found
