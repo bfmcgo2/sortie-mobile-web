@@ -46,3 +46,9 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* Dynamic viewport height for mobile browsers */
+.h-dvh {
+  height: 100dvh; /* Dynamic viewport height - accounts for browser UI */
+  height: var(--vh, 100vh); /* Fallback using CSS variable set by JS */
+}
