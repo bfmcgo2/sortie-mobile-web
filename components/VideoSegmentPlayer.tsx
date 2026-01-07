@@ -91,7 +91,7 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
       <video
         ref={videoRef}
         src={location.video_url}
-        className="w-full h-full object-contain"
+        className="w-full h-full object-cover"
         playsInline
         muted={false}
         autoPlay
@@ -124,7 +124,14 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
 
       {/* Location Name and Address Link */}
       {(location.name || location.location_name) && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+        <div 
+          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-6 pt-6"
+          style={{ 
+            paddingBottom: 'max(2rem, calc(1.5rem + env(safe-area-inset-bottom)))',
+            paddingLeft: 'max(1.5rem, env(safe-area-inset-left))',
+            paddingRight: 'max(1.5rem, env(safe-area-inset-right))'
+          }}
+        >
           <a
             href={
               location.coordinates
