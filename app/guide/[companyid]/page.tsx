@@ -29,7 +29,7 @@ type ViewState = 'loading' | 'map' | 'video';
 
 export default function GuidePage() {
   const params = useParams();
-  const companyId = params.companyid as string;
+  const companyId = params?.companyid as string | undefined;
   const [viewState, setViewState] = useState<ViewState>('loading');
   const [company, setCompany] = useState<CompanyData | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -51,6 +51,11 @@ export default function GuidePage() {
   }, []);
 
   useEffect(() => {
+    if (!companyId) {
+      console.warn('⚠️ No company ID provided');
+      return;
+    }
+
     // Find company from JSON data
     const foundCompany = companiesData.find(
       (c: CompanyData) => c.id === companyId
@@ -162,9 +167,9 @@ export default function GuidePage() {
             className="mb-6 rounded-full flex items-center justify-center overflow-hidden"
             style={{ 
               backgroundColor: '#fdf5e2',
-              width: '200px',
-              height: '200px',
-              padding: '10px'
+              width: '50px',
+              height: '50px',
+              padding: '2px'
             }}
           >
             {company.logo && (
@@ -239,6 +244,20 @@ export default function GuidePage() {
           onLocationClick={handleLocationClick}
           company={company}
         />
+      </div>
+    );
+  }
+
+  // Fallback if companyId is not available
+  if (!companyId) {
+    return (
+      <div 
+        className={`flex flex-col items-center justify-center h-screen w-screen ${inter.className}`}
+        style={{ backgroundColor: '#18204aff', color: '#fdf5e2' }}
+      >
+        <p className="text-xl font-bold text-center">
+          Company ID not found
+        </p>
       </div>
     );
   }

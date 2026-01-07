@@ -122,16 +122,32 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
         )}
       </div>
 
-      {/* Location Info Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-        <h3 className="text-white text-xl font-bold mb-1">{location.name}</h3>
-        {location.location_name && (
-          <p className="text-white/80 text-sm">{location.location_name}</p>
-        )}
-        {location.context && (
-          <p className="text-white/70 text-sm mt-2">{location.context}</p>
-        )}
-      </div>
+      {/* Location Name and Address Link */}
+      {(location.name || location.location_name) && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+          <a
+            href={
+              location.coordinates
+                ? `https://www.google.com/maps/search/?api=1&query=${location.coordinates.lat},${location.coordinates.lng}`
+                : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.location_name || location.name)}`
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block"
+          >
+            {location.name && (
+              <h3 className="text-white text-xl font-bold mb-1 hover:text-white/90 transition-colors">
+                {location.name}
+              </h3>
+            )}
+            {location.location_name && (
+              <p className="text-white/90 text-sm hover:text-white underline transition-colors">
+                {location.location_name}
+              </p>
+            )}
+          </a>
+        </div>
+      )}
     </div>
   );
 }

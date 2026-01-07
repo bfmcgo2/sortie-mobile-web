@@ -48,14 +48,17 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const regularMarkersRef = useRef<google.maps.Marker[]>([]);
   const companyMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
+  const userLocationMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
+  const watchPositionIdRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [useAdvancedMarkers, setUseAdvancedMarkers] = useState(true);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
   const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || '';
 
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script-guide',
+    id: 'google-map-script',
     googleMapsApiKey: apiKey,
     libraries: LIBRARIES,
   });
@@ -466,6 +469,7 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
         }
         companyMarkerRef.current = null;
       }
+      // Note: userLocationMarkerRef is cleaned up in onUnmount
     };
   }, [isLoaded, mapReady, locations, isActive, onLocationClick, mapId, company]);
 
@@ -476,8 +480,134 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
   };
 
   const onUnmount = () => {
+    // Stop watching position
+    if (watchPositionIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchPositionIdRef.current);
+      watchPositionIdRef.current = null;
+    }
+    // Clean up user location marker
+    if (userLocationMarkerRef.current) {
+      if (userLocationMarkerRef.current instanceof google.maps.marker.AdvancedMarkerElement) {
+        userLocationMarkerRef.current.map = null;
+      } else {
+        userLocationMarkerRef.current.setMap(null);
+      }
+      userLocationMarkerRef.current = null;
+    }
     mapRef.current = null;
     setMapReady(false);
+  };
+
+  // Update user location marker position
+  const updateUserLocationMarker = (location: { lat: number; lng: number }) => {
+    if (!mapRef.current) return;
+
+    const map = mapRef.current;
+    const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && !!mapId;
+
+    // If marker doesn't exist, create it
+    if (!userLocationMarkerRef.current) {
+      try {
+        if (hasAdvancedMarkerSupport) {
+          // Create a blue circle for user location
+          const locationElement = document.createElement('div');
+          locationElement.style.width = '20px';
+          locationElement.style.height = '20px';
+          locationElement.style.borderRadius = '50%';
+          locationElement.style.backgroundColor = '#4285F4';
+          locationElement.style.border = '3px solid white';
+          locationElement.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+
+          const marker = new google.maps.marker.AdvancedMarkerElement({
+            map: map,
+            position: location,
+            title: 'Your Location',
+            content: locationElement,
+            zIndex: 2000,
+          });
+          userLocationMarkerRef.current = marker;
+        } else {
+          // Fallback for regular markers
+          const marker = new google.maps.Marker({
+            map: map,
+            position: location,
+            title: 'Your Location',
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 10,
+              fillColor: '#4285F4',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 3,
+            },
+            zIndex: 2000,
+          });
+          userLocationMarkerRef.current = marker;
+        }
+      } catch (error: any) {
+        console.error('Error creating user location marker:', error);
+      }
+    } else {
+      // Update existing marker position
+      try {
+        if (userLocationMarkerRef.current instanceof google.maps.marker.AdvancedMarkerElement) {
+          userLocationMarkerRef.current.position = location;
+        } else {
+          userLocationMarkerRef.current.setPosition(location);
+        }
+      } catch (error: any) {
+        console.error('Error updating user location marker:', error);
+      }
+    }
+  };
+
+  // Get user's current location and watch for changes
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      console.error('Geolocation is not supported by this browser.');
+      alert('Geolocation is not supported by this browser.');
+      return;
+    }
+
+    // Stop any existing watch
+    if (watchPositionIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchPositionIdRef.current);
+      watchPositionIdRef.current = null;
+    }
+
+    // Watch position for real-time updates
+    watchPositionIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setUserLocation(location);
+        console.log('📍 User location updated:', location);
+
+        // Center map on user location (only on first update)
+        if (!userLocation && mapRef.current) {
+          mapRef.current.setCenter(location);
+          mapRef.current.setZoom(15);
+        }
+
+        // Update user location marker
+        updateUserLocationMarker(location);
+      },
+      (error) => {
+        console.error('Error watching user location:', error);
+        if (watchPositionIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchPositionIdRef.current);
+          watchPositionIdRef.current = null;
+        }
+        alert('Unable to get your location. Please enable location services.');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0, // Always get fresh position
+      }
+    );
   };
 
   if (loadError) {
@@ -518,28 +648,51 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
   
   try {
     return (
-      <GoogleMap
-        mapContainerStyle={mapContainerStyle}
-        center={mapOptions.center}
-        zoom={mapOptions.center === defaultCenter ? defaultZoom : undefined}
-        onLoad={onLoad}
-        onUnmount={onUnmount}
-        options={{
-          disableDefaultUI: true,
-          zoomControl: true,
-          streetViewControl: false,
-          mapTypeControl: false,
-          fullscreenControl: false,
-          mapId: mapId || undefined,
-          styles: [
-            {
-              featureType: 'all',
-              elementType: 'labels',
-              stylers: [{ visibility: 'off' }],
-            },
-          ],
-        }}
-      />
+      <div className="relative w-full h-full">
+        <GoogleMap
+          mapContainerStyle={mapContainerStyle}
+          center={mapOptions.center}
+          zoom={mapOptions.center === defaultCenter ? defaultZoom : undefined}
+          onLoad={onLoad}
+          onUnmount={onUnmount}
+          options={{
+            disableDefaultUI: true,
+            zoomControl: true,
+            streetViewControl: false,
+            mapTypeControl: false,
+            fullscreenControl: false,
+            mapId: mapId || undefined,
+            styles: [
+              {
+                featureType: 'all',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }],
+              },
+            ],
+          }}
+        />
+        {/* My Location Button */}
+        <button
+          onClick={getCurrentLocation}
+          className="absolute bottom-4 right-4 z-10 bg-white hover:bg-gray-100 rounded-full p-3 shadow-lg flex items-center justify-center"
+          style={{
+            width: '48px',
+            height: '48px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          }}
+          title="Show my location"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="#4285F4"
+            width="24"
+            height="24"
+          >
+            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+          </svg>
+        </button>
+      </div>
     );
   } catch (error: any) {
     console.error('❌ Error rendering GoogleMap:', error);

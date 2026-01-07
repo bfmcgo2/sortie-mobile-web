@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useJsApiLoader, GoogleMap } from '@react-google-maps/api';
-import { fetchPhiladelphiaLocations, LocationWithVideos } from '@/lib/supabase';
+import { fetchKauaiLocations, LocationWithVideos } from '@/lib/supabase';
 import SVG2 from '@/components/svg/SVG2';
 
 const mapContainerStyle = {
@@ -11,8 +11,8 @@ const mapContainerStyle = {
 };
 
 const defaultCenter = {
-  lat: 39.9526, // Philadelphia
-  lng: -75.1652,
+  lat: 22.0964, // Kauai, HI
+  lng: -159.5261,
 };
 
 const defaultZoom = 12;
@@ -21,7 +21,7 @@ const LIBRARIES: ("marker")[] = ['marker'];
 
 type ViewState = 'map' | 'videos';
 
-export default function PhillyPinsPage() {
+export default function KauaiPinsPage() {
   const [viewState, setViewState] = useState<ViewState>('map');
   const [locations, setLocations] = useState<LocationWithVideos[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,7 @@ export default function PhillyPinsPage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Load Philadelphia locations (only on mobile)
+  // Load Kauai locations (only on mobile)
   useEffect(() => {
     if (!isMobile) {
       setLoading(false);
@@ -65,9 +65,9 @@ export default function PhillyPinsPage() {
     async function loadLocations() {
       try {
         setLoading(true);
-        const phillyLocations = await fetchPhiladelphiaLocations();
-        setLocations(phillyLocations);
-        console.log('Loaded Philadelphia locations:', phillyLocations.length);
+        const kauaiLocations = await fetchKauaiLocations();
+        setLocations(kauaiLocations);
+        console.log('Loaded Kauai locations:', kauaiLocations.length);
       } catch (error) {
         console.error('Failed to load locations:', error);
       } finally {
@@ -282,13 +282,6 @@ export default function PhillyPinsPage() {
 
               marker.addListener('click', () => {
                 console.log('📍 Marker clicked:', location.name);
-                console.log('📍 Location ID:', location.id);
-                console.log('📍 Video Segments:', location.videoSegments.map(s => ({
-                  video_id: s.video_id,
-                  location_id: s.location_id,
-                  time_start_sec: s.time_start_sec,
-                  time_end_sec: s.time_end_sec
-                })));
                 // Save current map state before switching to video
                 if (mapRef.current) {
                   const center = mapRef.current.getCenter();
@@ -705,7 +698,7 @@ export default function PhillyPinsPage() {
           <SVG2 />
         </div>
         <div className="mt-6 text-center">
-          <h1 className="text-2xl font-semibold mb-1">Philadelphia Pins</h1>
+          <h1 className="text-2xl font-semibold mb-1">Kauai Pins</h1>
           <p className="text-sm text-gray-300">Loading locations and videos…</p>
         </div>
       </div>
