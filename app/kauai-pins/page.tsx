@@ -36,6 +36,7 @@ export default function KauaiPinsPage() {
   const videoContainerRefs = useRef<(HTMLDivElement | null)[]>([]);
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
+  const manuallyPausedVideos = useRef<Set<number>>(new Set());
   const [mapReady, setMapReady] = useState(false);
   const [savedMapState, setSavedMapState] = useState<{ center: { lat: number; lng: number }; zoom: number } | null>(null);
   const [hasInitialBounds, setHasInitialBounds] = useState(false);
@@ -427,11 +428,13 @@ export default function KauaiPinsPage() {
     video.src = currentSegment.video_url;
     video.currentTime = currentSegment.time_start_sec;
 
-    // Play when ready
+    // Play when ready (unless manually paused)
     const handleCanPlay = () => {
       video.muted = false;
       video.volume = 1.0;
-      video.play().catch(console.error);
+      if (!manuallyPausedVideos.current.has(currentVideoIndex)) {
+        video.play().catch(console.error);
+      }
     };
 
     // Check if segment ended
@@ -551,6 +554,8 @@ export default function KauaiPinsPage() {
     setViewState('map');
     setSelectedLocation(null);
     setCurrentVideoIndex(0);
+    // Clear manually paused videos
+    manuallyPausedVideos.current.clear();
     // Restore saved map state if available
     if (mapRef.current && savedMapState) {
       setTimeout(() => {
@@ -670,10 +675,24 @@ export default function KauaiPinsPage() {
                     videoRefs.current[index] = el;
                   }}
                   src={segment.video_url}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover cursor-pointer"
                   playsInline
                   loop={false}
                   muted={false}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const video = videoRefs.current[index];
+                    if (video) {
+                      if (video.paused) {
+                        video.play().catch(console.error);
+                        manuallyPausedVideos.current.delete(index);
+                      } else {
+                        video.pause();
+                        manuallyPausedVideos.current.add(index);
+                      }
+                    }
+                  }}
                 />
                 {/* Segment Info */}
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">

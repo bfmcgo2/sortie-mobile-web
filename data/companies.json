@@ -39,6 +39,15 @@
     "id": "2638472",
     "name": "Stereo Flavors",
     "logo": "/companies/stereo-flavors-logo.jpg"
+  },
+  {
+    "id": "2713825",
+    "name": "Kauai",
+    "logo": "/companies/westin.jpg",
+    "coordinates": {
+      "lat": 22.222376666719388,
+      "lng": -159.46834030000255
+    }
   }
 ]
 
