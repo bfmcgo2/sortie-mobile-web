@@ -55,6 +55,10 @@ export default function CreatorGuidePage() {
     }
 
     async function loadGuide() {
+      if (!guideId) {
+        return; // Type guard for TypeScript
+      }
+      
       setLoadingLocations(true);
 
       try {
