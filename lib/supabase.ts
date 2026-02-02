@@ -460,3 +460,179 @@ export async function fetchKauaiLocations(): Promise<LocationWithVideos[]> {
 
   return Array.from(locationMap.values());
 }
+
+// ============================================================================
+// Guide Types and Functions (Database-driven guides)
+// ============================================================================
+
+// Guide type for database-driven guides
+export type Guide = {
+  id: string;
+  name: string;
+  description?: string;
+  company_id?: string;
+  logo_url?: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  user_id?: string;
+  user_email?: string;
+  is_active: boolean;
+  is_public: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+// Guide with locations type
+export type GuideWithLocations = {
+  guide: Guide;
+  locations: GuideLocation[];
+};
+
+// Fetch guide by ID from database (with locations)
+export async function fetchGuideById(guideId: string): Promise<GuideWithLocations> {
+  // First, fetch the guide to verify it exists and is public/active
+  const { data: guideData, error: guideError } = await supabase
+    .from('guides')
+    .select('*')
+    .eq('id', guideId)
+    .eq('is_active', true)
+    .eq('is_public', true) // Only fetch public guides for mobile
+    .single();
+
+  if (guideError) {
+    throw new Error(`Failed to fetch guide: ${guideError.message}`);
+  }
+
+  if (!guideData) {
+    throw new Error('Guide not found or not public');
+  }
+
+  // Fetch guide locations with display order
+  const { data: guideLocationsData, error: guideLocationsError } = await supabase
+    .from('guide_locations')
+    .select(`
+      display_order,
+      location_id,
+      locations (
+        *,
+        videos (
+          id,
+          video_url,
+          is_public
+        )
+      )
+    `)
+    .eq('guide_id', guideId)
+    .order('display_order', { ascending: true });
+
+  if (guideLocationsError) {
+    console.error('Failed to fetch guide locations:', guideLocationsError);
+    throw new Error(`Failed to fetch guide locations: ${guideLocationsError.message}`);
+  }
+
+  // Transform data to match expected format
+  const locations: GuideLocation[] = (guideLocationsData || [])
+    .map((gl: any) => gl.locations)
+    .filter((loc: any) => {
+      // Only include locations with valid data and public videos
+      if (!loc || !loc.name || !loc.coordinates || !loc.video_id) {
+        return false;
+      }
+      
+      // Handle videos as either object or array (Supabase can return either)
+      const video = Array.isArray(loc.videos) ? loc.videos[0] : loc.videos;
+      return video && video.is_public === true;
+    })
+    .map((loc: any) => {
+      // Handle videos as either object or array
+      const video = Array.isArray(loc.videos) ? loc.videos[0] : loc.videos;
+      
+      return {
+        id: loc.id,
+        name: loc.name,
+        location_name: loc.location_name || '',
+        coordinates: typeof loc.coordinates === 'string' 
+          ? JSON.parse(loc.coordinates) 
+          : loc.coordinates,
+        time_start_sec: typeof loc.time_start_sec === 'string' 
+          ? parseFloat(loc.time_start_sec) 
+          : loc.time_start_sec,
+        time_end_sec: loc.time_end_sec 
+          ? (typeof loc.time_end_sec === 'string' ? parseFloat(loc.time_end_sec) : loc.time_end_sec)
+          : null,
+        place_id: loc.place_id,
+        mention: loc.mention,
+        context: loc.context,
+        video_id: loc.video_id,
+        video_url: convertToPublicUrl(video.video_url),
+      };
+    });
+
+  // Parse coordinates if it's a string
+  const coordinates = typeof guideData.coordinates === 'string'
+    ? JSON.parse(guideData.coordinates)
+    : guideData.coordinates;
+
+  const guide: Guide = {
+    id: guideData.id,
+    name: guideData.name,
+    description: guideData.description,
+    company_id: guideData.company_id,
+    logo_url: guideData.logo_url,
+    coordinates: coordinates,
+    user_id: guideData.user_id,
+    user_email: guideData.user_email,
+    is_active: guideData.is_active,
+    is_public: guideData.is_public,
+    created_at: guideData.created_at,
+    updated_at: guideData.updated_at,
+  };
+
+  return {
+    guide,
+    locations,
+  };
+}
+
+// Fetch guides by user_id (for creator guides)
+export async function fetchGuidesByUserId(userId: string): Promise<Guide[]> {
+  const { data, error } = await supabase
+    .from('guides')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .eq('is_public', true) // Only fetch public guides
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to fetch guides: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  // Parse coordinates for each guide
+  return data.map((guideData: any) => {
+    const coordinates = typeof guideData.coordinates === 'string'
+      ? JSON.parse(guideData.coordinates)
+      : guideData.coordinates;
+
+    return {
+      id: guideData.id,
+      name: guideData.name,
+      description: guideData.description,
+      company_id: guideData.company_id,
+      logo_url: guideData.logo_url,
+      coordinates: coordinates,
+      user_id: guideData.user_id,
+      user_email: guideData.user_email,
+      is_active: guideData.is_active,
+      is_public: guideData.is_public,
+      created_at: guideData.created_at,
+      updated_at: guideData.updated_at,
+    };
+  });
+}
