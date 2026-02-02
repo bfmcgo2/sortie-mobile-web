@@ -81,7 +81,7 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
     }
   };
 
-  if (!location) {
+  if (!location || !location.video_url || location.isCompanyPin === true) {
     return null;
   }
 

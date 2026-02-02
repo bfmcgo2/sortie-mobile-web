@@ -128,8 +128,26 @@ export default function GuidePage() {
   }, [company, imageLoaded, loadingLocations]);
 
   const handleLocationClick = (location: GuideLocation) => {
-    setSelectedLocation(location);
-    setViewState('video');
+    // Company pins don't have videos, so don't open video player
+    if (location.isCompanyPin === true) {
+      // For company pins, you could show location info or open Google Maps
+      // For now, we'll just log it - you can add a modal or info panel later
+      console.log('Company pin clicked:', location.name);
+      
+      // Optionally open Google Maps
+      if (location.place_id) {
+        window.open(`https://www.google.com/maps/place/?q=place_id:${location.place_id}`, '_blank');
+      } else if (location.coordinates) {
+        window.open(`https://www.google.com/maps?q=${location.coordinates.lat},${location.coordinates.lng}`, '_blank');
+      }
+      return;
+    }
+    
+    // Only open video player for video locations
+    if (location.video_url) {
+      setSelectedLocation(location);
+      setViewState('video');
+    }
   };
 
   const handleCloseVideo = () => {

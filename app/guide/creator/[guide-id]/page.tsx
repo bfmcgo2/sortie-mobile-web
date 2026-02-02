@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Inter } from 'next/font/google';
-import { fetchGuideById, GuideLocation, Guide } from '@/lib/supabase';
+import { fetchGuideById, GuideLocation, Guide, GuidePin } from '@/lib/supabase';
 import GuideMap from '@/components/GuideMap';
 import VideoSegmentPlayer from '@/components/VideoSegmentPlayer';
 import SVG2 from '@/components/svg/SVG2';
@@ -32,6 +32,7 @@ export default function CreatorGuidePage() {
   const [guide, setGuide] = useState<Guide | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [locations, setLocations] = useState<GuideLocation[]>([]);
+  const [pins, setPins] = useState<GuidePin[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<GuideLocation | null>(null);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [isMobile, setIsMobile] = useState(true);
@@ -67,6 +68,7 @@ export default function CreatorGuidePage() {
         
         setGuide(guideData.guide);
         setLocations(guideData.locations);
+        setPins(guideData.pins || []);
         
         console.log('✅ Creator guide loaded:', guideData.guide.name, 'Locations:', guideData.locations.length);
         console.log('👤 Created by:', guideData.guide.user_email);
@@ -106,8 +108,37 @@ export default function CreatorGuidePage() {
   }, [guide, imageLoaded, loadingLocations]);
 
   const handleLocationClick = (location: GuideLocation) => {
-    setSelectedLocation(location);
-    setViewState('video');
+    // Company pins don't have videos, so don't open video player
+    if (location.isCompanyPin === true) {
+      // For company pins, you could show location info or open Google Maps
+      // For now, we'll just log it - you can add a modal or info panel later
+      console.log('Company pin clicked:', location.name);
+      
+      // Optionally open Google Maps
+      if (location.place_id) {
+        window.open(`https://www.google.com/maps/place/?q=place_id:${location.place_id}`, '_blank');
+      } else if (location.coordinates) {
+        window.open(`https://www.google.com/maps?q=${location.coordinates.lat},${location.coordinates.lng}`, '_blank');
+      }
+      return;
+    }
+    
+    // Only open video player for video locations
+    if (location.video_url) {
+      setSelectedLocation(location);
+      setViewState('video');
+    }
+  };
+
+  const handlePinClick = (pin: GuidePin) => {
+    // Pins don't have videos, so open Google Maps
+    console.log('Pin clicked:', pin.name);
+    
+    if (pin.placeId) {
+      window.open(`https://www.google.com/maps/place/?q=place_id:${pin.placeId}`, '_blank');
+    } else if (pin.coordinates) {
+      window.open(`https://www.google.com/maps?q=${pin.coordinates.lat},${pin.coordinates.lng}`, '_blank');
+    }
   };
 
   const handleCloseVideo = () => {
@@ -207,11 +238,12 @@ export default function CreatorGuidePage() {
   // Map view (default after loading)
   if (isMobile) {
     // Convert guide to company data format for GuideMap component
-    const displayCompany: CompanyData | null = guide ? {
-      id: guide.id,
+    // Only show company pin if there's a company_id or logo_url (non-empty)
+    const displayCompany: CompanyData | null = guide && (guide.company_id || (guide.logo_url && guide.logo_url.trim() !== '')) ? {
+      id: guide.company_id || guide.id,
       name: guide.name,
-      logo: guide.logo_url || '/placeholder-logo.png',
-      coordinates: guide.coordinates,
+      logo: guide.logo_url || '',
+      coordinates: guide.coordinates || undefined,
     } : null;
 
     return (
@@ -236,9 +268,12 @@ export default function CreatorGuidePage() {
         <div className="flex-1 relative overflow-hidden" style={{ minHeight: 0 }}>
           <GuideMap
             locations={locations}
+            pins={pins}
             isActive={viewState === 'map'}
             onLocationClick={handleLocationClick}
+            onPinClick={handlePinClick}
             company={displayCompany}
+            guide={guide}
           />
         </div>
       </div>

@@ -117,8 +117,9 @@ export type GuideLocation = {
   place_id?: string;
   mention?: string;
   context?: string;
-  video_id: string;
-  video_url: string;
+  video_id: string | null;  // Can be null for company pins
+  video_url: string | null; // Can be null for company pins
+  isCompanyPin?: boolean;   // NEW: Optional flag to identify company pins
 };
 
 // Fetch all locations from all public videos for guide pages
@@ -469,25 +470,43 @@ export async function fetchKauaiLocations(): Promise<LocationWithVideos[]> {
 export type Guide = {
   id: string;
   name: string;
-  description?: string;
-  company_id?: string;
-  logo_url?: string;
+  description?: string | null;
+  company_id?: string | null;
+  logo_url?: string | null;
   coordinates?: {
     lat: number;
     lng: number;
-  };
+  } | null; // Map center
   user_id?: string;
   user_email?: string;
   is_active: boolean;
   is_public: boolean;
   created_at?: string;
   updated_at?: string;
+  // Company Pin (optional - all fields can be null)
+  company_pin_name?: string | null;
+  company_pin_address?: string | null;
+  company_pin_coordinates?: { lat: number; lng: number } | null;
+  company_pin_place_id?: string | null;
 };
 
-// Guide with locations type
+// Pin type for non-video locations
+export type GuidePin = {
+  id: string;
+  name: string;
+  address?: string | null;
+  coordinates: { lat: number; lng: number };
+  placeId?: string | null;
+  description?: string | null;
+  pinImageUrl?: string | null;
+  displayOrder: number;
+};
+
+// Guide with locations and pins type
 export type GuideWithLocations = {
   guide: Guide;
   locations: GuideLocation[];
+  pins: GuidePin[];
 };
 
 // Fetch guide by ID from database (with locations)
@@ -536,18 +555,27 @@ export async function fetchGuideById(guideId: string): Promise<GuideWithLocation
   const locations: GuideLocation[] = (guideLocationsData || [])
     .map((gl: any) => gl.locations)
     .filter((loc: any) => {
-      // Only include locations with valid data and public videos
-      if (!loc || !loc.name || !loc.coordinates || !loc.video_id) {
+      // Must have name and coordinates
+      if (!loc || !loc.name || !loc.coordinates) {
         return false;
       }
       
-      // Handle videos as either object or array (Supabase can return either)
+      // Check if it's a company pin (no video_id)
+      const isCompanyPin = !loc.video_id || loc.isCompanyPin === true;
+      
+      if (isCompanyPin) {
+        // Company pins don't need video validation
+        return true;
+      }
+      
+      // For video locations, validate video exists and is public
       const video = Array.isArray(loc.videos) ? loc.videos[0] : loc.videos;
       return video && video.is_public === true;
     })
     .map((loc: any) => {
       // Handle videos as either object or array
       const video = Array.isArray(loc.videos) ? loc.videos[0] : loc.videos;
+      const isCompanyPin = !loc.video_id || loc.isCompanyPin === true;
       
       return {
         id: loc.id,
@@ -565,8 +593,41 @@ export async function fetchGuideById(guideId: string): Promise<GuideWithLocation
         place_id: loc.place_id,
         mention: loc.mention,
         context: loc.context,
-        video_id: loc.video_id,
-        video_url: convertToPublicUrl(video.video_url),
+        video_id: loc.video_id || null,
+        video_url: video && video.video_url ? convertToPublicUrl(video.video_url) : null,
+        isCompanyPin: isCompanyPin,
+      };
+    });
+
+  // Fetch guide pins (non-video locations)
+  const { data: guidePinsData, error: guidePinsError } = await supabase
+    .from('guide_pins')
+    .select('*')
+    .eq('guide_id', guideId)
+    .order('display_order', { ascending: true });
+
+  if (guidePinsError) {
+    console.error('Failed to fetch guide pins:', guidePinsError);
+    // Don't throw error, just log it - pins are optional
+  }
+
+  // Transform pins data to match expected format
+  const pins: GuidePin[] = (guidePinsData || [])
+    .filter((pin: any) => pin && pin.name && pin.coordinates)
+    .map((pin: any) => {
+      const coordinates = typeof pin.coordinates === 'string'
+        ? JSON.parse(pin.coordinates)
+        : pin.coordinates;
+
+      return {
+        id: pin.id,
+        name: pin.name,
+        address: pin.address || null,
+        coordinates: coordinates,
+        placeId: pin.place_id || null,
+        description: pin.description || null,
+        pinImageUrl: pin.pin_image_url || null,
+        displayOrder: pin.display_order || 0,
       };
     });
 
@@ -574,6 +635,13 @@ export async function fetchGuideById(guideId: string): Promise<GuideWithLocation
   const coordinates = typeof guideData.coordinates === 'string'
     ? JSON.parse(guideData.coordinates)
     : guideData.coordinates;
+
+  // Parse company pin coordinates if it's a string
+  const companyPinCoordinates = guideData.company_pin_coordinates
+    ? (typeof guideData.company_pin_coordinates === 'string'
+        ? JSON.parse(guideData.company_pin_coordinates)
+        : guideData.company_pin_coordinates)
+    : null;
 
   const guide: Guide = {
     id: guideData.id,
@@ -588,11 +656,16 @@ export async function fetchGuideById(guideId: string): Promise<GuideWithLocation
     is_public: guideData.is_public,
     created_at: guideData.created_at,
     updated_at: guideData.updated_at,
+    company_pin_name: guideData.company_pin_name || null,
+    company_pin_address: guideData.company_pin_address || null,
+    company_pin_coordinates: companyPinCoordinates,
+    company_pin_place_id: guideData.company_pin_place_id || null,
   };
 
   return {
     guide,
     locations,
+    pins,
   };
 }
 

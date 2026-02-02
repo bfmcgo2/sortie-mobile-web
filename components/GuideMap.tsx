@@ -14,11 +14,16 @@ interface CompanyData {
   };
 }
 
+import { GuidePin } from '@/lib/supabase';
+
 interface GuideMapProps {
   locations: GuideLocation[];
+  pins?: GuidePin[]; // Non-video pins
   isActive: boolean;
   onLocationClick?: (location: GuideLocation) => void;
+  onPinClick?: (pin: GuidePin) => void;
   company?: CompanyData | null;
+  guide?: { company_pin_coordinates?: { lat: number; lng: number } | null; company_pin_name?: string | null } | null;
 }
 
 const mapContainerStyle = {
@@ -36,7 +41,7 @@ const defaultZoom = 10;
 // Define libraries as a constant to avoid the warning
 const LIBRARIES: ("marker")[] = ['marker'];
 
-export default function GuideMap({ locations, isActive, onLocationClick, company }: GuideMapProps) {
+export default function GuideMap({ locations, pins = [], isActive, onLocationClick, onPinClick, company, guide }: GuideMapProps) {
   console.log('🗺️ GuideMap rendered with locations:', locations?.length, 'isActive:', isActive);
   console.log('🗺️ GuideMap locations type:', typeof locations, 'isArray?', Array.isArray(locations), 'constructor:', locations?.constructor?.name);
   if (locations && locations.length > 0) {
@@ -47,6 +52,9 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const regularMarkersRef = useRef<google.maps.Marker[]>([]);
+  const pinMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const pinRegularMarkersRef = useRef<google.maps.Marker[]>([]);
+  const companyPinMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
   const companyMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
   const userLocationMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
   const watchPositionIdRef = useRef<number | null>(null);
@@ -81,8 +89,14 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
     const allLatitudes: number[] = [];
     const allLongitudes: number[] = [];
 
-    // Add company coordinates if available
-    if (company?.coordinates) {
+    // Add company pin from guide if available
+    if (guide?.company_pin_coordinates) {
+      allLatitudes.push(guide.company_pin_coordinates.lat);
+      allLongitudes.push(guide.company_pin_coordinates.lng);
+    }
+    
+    // Add company coordinates if available and has company_id or logo (non-empty)
+    if (company?.coordinates && (company?.id || (company?.logo && company.logo.trim() !== ''))) {
       allLatitudes.push(company.coordinates!.lat);
       allLongitudes.push(company.coordinates!.lng);
     }
@@ -101,6 +115,12 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
       console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack');
       throw error;
     }
+    
+    // Add pin coordinates
+    pins.forEach((pin) => {
+      allLatitudes.push(pin.coordinates.lat);
+      allLongitudes.push(pin.coordinates.lng);
+    });
 
     if (allLatitudes.length === 0) {
       return {
@@ -130,7 +150,7 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
         west: minLng - lngPadding,
       },
     };
-  }, [locations, company]);
+  }, [locations, pins, company, guide]);
 
   // Create and update markers
   useEffect(() => {
@@ -175,6 +195,10 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
       markersRef.current = [];
       regularMarkersRef.current.forEach(marker => marker.setMap(null));
       regularMarkersRef.current = [];
+      pinMarkersRef.current.forEach(marker => marker.map = null);
+      pinMarkersRef.current = [];
+      pinRegularMarkersRef.current.forEach(marker => marker.setMap(null));
+      pinRegularMarkersRef.current = [];
 
       if (!hasAdvancedMarkerSupport) {
         console.log('🗺️ Marker useEffect - using regular markers');
@@ -183,6 +207,8 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
         locations.forEach((location, index) => {
           console.log(`🗺️ Creating regular marker ${index} for location:`, location.name);
           try {
+          // Different styling for company pins vs video locations
+          const isCompanyPin = location.isCompanyPin === true;
           const marker = new google.maps.Marker({
             map: map,
             position: {
@@ -192,11 +218,11 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
             title: location.name,
             icon: {
               path: google.maps.SymbolPath.CIRCLE,
-              scale: 8,
-              fillColor: '#007AFF',
+              scale: isCompanyPin ? 10 : 8, // Slightly larger for company pins
+              fillColor: isCompanyPin ? '#34C759' : '#007AFF', // Green for company pins, blue for video locations
               fillOpacity: 1,
               strokeColor: '#ffffff',
-              strokeWeight: 2,
+              strokeWeight: isCompanyPin ? 3 : 2, // Thicker border for company pins
             },
           });
 
@@ -220,6 +246,22 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
         locations.forEach((location, index) => {
           console.log(`🗺️ Creating advanced marker ${index} for location:`, location.name);
           try {
+            // Different styling for company pins vs video locations
+            const isCompanyPin = location.isCompanyPin === true;
+            
+            // Create a colored pin element for company pins
+            let content: HTMLElement | undefined;
+            if (isCompanyPin) {
+              const pinElement = document.createElement('div');
+              pinElement.style.width = '20px';
+              pinElement.style.height = '20px';
+              pinElement.style.borderRadius = '50%';
+              pinElement.style.backgroundColor = '#34C759'; // Green for company pins
+              pinElement.style.border = '3px solid white';
+              pinElement.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+              content = pinElement;
+            }
+            
             const marker = new google.maps.marker.AdvancedMarkerElement({
               map: map,
               position: {
@@ -227,6 +269,7 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
                 lng: location.coordinates.lng,
               },
               title: location.name,
+              content: content, // Green pin for company pins, default for video locations
             });
 
             marker.addListener('click', () => {
@@ -243,14 +286,150 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
           }
         });
       }
+      
+      // Create markers for pins (non-video locations) - Orange color
+      if (pins.length > 0) {
+        console.log('🗺️ Creating markers for', pins.length, 'pins');
+        
+        if (!hasAdvancedMarkerSupport) {
+          // Regular markers for pins
+          pins.forEach((pin, index) => {
+            try {
+              const marker = new google.maps.Marker({
+                map: map,
+                position: {
+                  lat: pin.coordinates.lat,
+                  lng: pin.coordinates.lng,
+                },
+                title: pin.name,
+                icon: {
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 9, // Slightly larger than video locations
+                  fillColor: '#FF9500', // Orange for pins
+                  fillOpacity: 1,
+                  strokeColor: '#ffffff',
+                  strokeWeight: 2,
+                },
+              });
+
+              marker.addListener('click', () => {
+                if (onPinClick) {
+                  onPinClick(pin);
+                }
+              });
+
+              pinRegularMarkersRef.current.push(marker);
+            } catch (error: any) {
+              console.error(`❌ Error creating pin marker ${index}:`, error);
+            }
+          });
+        } else {
+          // Advanced markers for pins
+          pins.forEach((pin, index) => {
+            try {
+              const pinElement = document.createElement('div');
+              pinElement.style.width = '18px';
+              pinElement.style.height = '18px';
+              pinElement.style.borderRadius = '50%';
+              pinElement.style.backgroundColor = '#FF9500'; // Orange for pins
+              pinElement.style.border = '3px solid white';
+              pinElement.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+              
+              const marker = new google.maps.marker.AdvancedMarkerElement({
+                map: map,
+                position: {
+                  lat: pin.coordinates.lat,
+                  lng: pin.coordinates.lng,
+                },
+                title: pin.name,
+                content: pinElement,
+              });
+
+              marker.addListener('click', () => {
+                if (onPinClick) {
+                  onPinClick(pin);
+                }
+              });
+
+              pinMarkersRef.current.push(marker);
+            } catch (error: any) {
+              console.error(`❌ Error creating advanced pin marker ${index}:`, error);
+            }
+          });
+        }
+      }
+      
+      // Create company pin marker from guide (if present) - Green color
+      if (guide?.company_pin_coordinates) {
+        console.log('🗺️ Creating company pin marker from guide');
+        const hasMapIdForCompanyPin = !!mapId;
+        const hasAdvancedMarkerSupportForCompanyPin = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapIdForCompanyPin;
+
+        // Clear existing company pin marker
+        if (companyPinMarkerRef.current) {
+          if (companyPinMarkerRef.current instanceof google.maps.marker.AdvancedMarkerElement) {
+            companyPinMarkerRef.current.map = null;
+          } else {
+            companyPinMarkerRef.current.setMap(null);
+          }
+          companyPinMarkerRef.current = null;
+        }
+
+        try {
+          if (hasAdvancedMarkerSupportForCompanyPin) {
+            const pinElement = document.createElement('div');
+            pinElement.style.width = '22px';
+            pinElement.style.height = '22px';
+            pinElement.style.borderRadius = '50%';
+            pinElement.style.backgroundColor = '#34C759'; // Green for company pin
+            pinElement.style.border = '3px solid white';
+            pinElement.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+              map: map,
+              position: {
+                lat: guide.company_pin_coordinates.lat,
+                lng: guide.company_pin_coordinates.lng,
+              },
+              title: guide.company_pin_name || 'Company Pin',
+              content: pinElement,
+              zIndex: 1000,
+            });
+
+            companyPinMarkerRef.current = marker;
+          } else {
+            const marker = new google.maps.Marker({
+              map: map,
+              position: {
+                lat: guide.company_pin_coordinates.lat,
+                lng: guide.company_pin_coordinates.lng,
+              },
+              title: guide.company_pin_name || 'Company Pin',
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 10,
+                fillColor: '#34C759', // Green for company pin
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 3,
+              },
+              zIndex: 1000,
+            });
+
+            companyPinMarkerRef.current = marker;
+          }
+        } catch (error: any) {
+          console.error('Error creating company pin marker:', error);
+        }
+      }
     } catch (error: any) {
       console.error('❌ Fatal error in marker creation useEffect:', error);
       console.error('❌ Error stack:', error?.stack);
       throw error;
     }
 
-    // Create company pin marker if coordinates are available
-    if (company?.coordinates) {
+    // Create company pin marker if coordinates are available and has company_id or logo (non-empty)
+    if (company?.coordinates && (company?.id || (company?.logo && company.logo.trim() !== ''))) {
       // Check for mapId - only use env var to avoid calling getMapId which causes context issues
       const hasMapIdForCompany = !!mapId;
       const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapIdForCompany;
@@ -427,8 +606,16 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
     // Fit map to bounds
     const bounds = new google.maps.LatLngBounds();
     
-    // Add company coordinates to bounds
-    if (company?.coordinates) {
+    // Add company pin from guide to bounds
+    if (guide?.company_pin_coordinates) {
+      bounds.extend({
+        lat: guide.company_pin_coordinates.lat,
+        lng: guide.company_pin_coordinates.lng,
+      });
+    }
+    
+    // Add company coordinates to bounds if has company_id or logo (non-empty)
+    if (company?.coordinates && (company?.id || (company?.logo && company.logo.trim() !== ''))) {
       bounds.extend({
         lat: company.coordinates!.lat,
         lng: company.coordinates!.lng,
@@ -440,6 +627,14 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
       bounds.extend({
         lat: loc.coordinates.lat,
         lng: loc.coordinates.lng,
+      });
+    });
+    
+    // Add pin coordinates to bounds
+    pins.forEach(pin => {
+      bounds.extend({
+        lat: pin.coordinates.lat,
+        lng: pin.coordinates.lng,
       });
     });
 
@@ -461,6 +656,18 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
       markersRef.current = [];
       regularMarkersRef.current.forEach(marker => marker.setMap(null));
       regularMarkersRef.current = [];
+      pinMarkersRef.current.forEach(marker => marker.map = null);
+      pinMarkersRef.current = [];
+      pinRegularMarkersRef.current.forEach(marker => marker.setMap(null));
+      pinRegularMarkersRef.current = [];
+      if (companyPinMarkerRef.current) {
+        if (companyPinMarkerRef.current instanceof google.maps.marker.AdvancedMarkerElement) {
+          companyPinMarkerRef.current.map = null;
+        } else {
+          companyPinMarkerRef.current.setMap(null);
+        }
+        companyPinMarkerRef.current = null;
+      }
       if (companyMarkerRef.current) {
         if (companyMarkerRef.current instanceof google.maps.marker.AdvancedMarkerElement) {
           companyMarkerRef.current.map = null;
@@ -471,7 +678,7 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
       }
       // Note: userLocationMarkerRef is cleaned up in onUnmount
     };
-  }, [isLoaded, mapReady, locations, isActive, onLocationClick, mapId, company]);
+  }, [isLoaded, mapReady, locations, pins, isActive, onLocationClick, onPinClick, mapId, company, guide]);
 
   const onLoad = (map: google.maps.Map) => {
     mapRef.current = map;
@@ -636,7 +843,7 @@ export default function GuideMap({ locations, isActive, onLocationClick, company
     );
   }
 
-  if (locations.length === 0 && !company?.coordinates) {
+  if (locations.length === 0 && pins.length === 0 && !guide?.company_pin_coordinates && !(company?.coordinates && (company?.id || (company?.logo && company.logo.trim() !== '')))) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center text-white">
         <p>No locations available</p>
