@@ -885,7 +885,7 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
         {/* My Location Button */}
         <button
           onClick={getCurrentLocation}
-          className="absolute bottom-4 right-4 z-10 bg-white hover:bg-gray-100 rounded-full p-3 shadow-lg flex items-center justify-center"
+          className="absolute bottom-4 left-4 z-10 bg-white hover:bg-gray-100 rounded-full p-3 shadow-lg flex items-center justify-center"
           style={{
             width: '48px',
             height: '48px',
