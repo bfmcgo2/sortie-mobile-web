@@ -488,15 +488,18 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
           companyMarkerRef.current = marker;
         } else {
           // Fallback for regular markers - create circular icon using canvas
-          const createCircularIcon = (logoUrl: string, size: number): Promise<string> => {
-            return new Promise((resolve, reject) => {
+          // NOTE: External URLs may fail due to CORS; in that case we gracefully
+          // fall back to a simple colored circle without throwing.
+          const createCircularIcon = (logoUrl: string, size: number): Promise<string | null> => {
+            return new Promise((resolve) => {
               const canvas = document.createElement('canvas');
               canvas.width = size;
               canvas.height = size;
               const ctx = canvas.getContext('2d');
               
               if (!ctx) {
-                reject(new Error('Could not get canvas context'));
+                console.error('Could not get canvas context for company logo');
+                resolve(null);
                 return;
               }
 
@@ -549,7 +552,8 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
               };
               
               img.onerror = () => {
-                reject(new Error('Failed to load logo image'));
+                console.error('Failed to load logo image, falling back to simple marker:', logoUrl);
+                resolve(null);
               };
               
               img.src = logoUrl;
@@ -558,44 +562,44 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
 
           createCircularIcon(company.logo, 48)
             .then((dataUrl) => {
-              const marker = new google.maps.Marker({
-                map: map,
-                position: {
-                  lat: company.coordinates!.lat,
-                  lng: company.coordinates!.lng,
-                },
-                title: company.name,
-                icon: {
-                  url: dataUrl,
-                  scaledSize: new google.maps.Size(48, 48),
-                  anchor: new google.maps.Point(24, 24),
-                },
-                zIndex: 1000,
-              });
+              if (dataUrl) {
+                const marker = new google.maps.Marker({
+                  map: map,
+                  position: {
+                    lat: company.coordinates!.lat,
+                    lng: company.coordinates!.lng,
+                  },
+                  title: company.name,
+                  icon: {
+                    url: dataUrl,
+                    scaledSize: new google.maps.Size(48, 48),
+                    anchor: new google.maps.Point(24, 24),
+                  },
+                  zIndex: 1000,
+                });
 
-              companyMarkerRef.current = marker;
-            })
-            .catch((error) => {
-              console.error('Error creating circular icon:', error);
-              // Fallback to simple circular marker
-              const marker = new google.maps.Marker({
-                map: map,
-                position: {
-                  lat: company.coordinates!.lat,
-                  lng: company.coordinates!.lng,
-                },
-                title: company.name,
-                icon: {
-                  path: google.maps.SymbolPath.CIRCLE,
-                  scale: 12,
-                  fillColor: '#007AFF',
-                  fillOpacity: 1,
-                  strokeColor: '#ffffff',
-                  strokeWeight: 2,
-                },
-                zIndex: 1000,
-              });
-              companyMarkerRef.current = marker;
+                companyMarkerRef.current = marker;
+              } else {
+                // Fallback to simple circular marker if logo couldn't be loaded (e.g., CORS)
+                const marker = new google.maps.Marker({
+                  map: map,
+                  position: {
+                    lat: company.coordinates!.lat,
+                    lng: company.coordinates!.lng,
+                  },
+                  title: company.name,
+                  icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: '#007AFF',
+                    fillOpacity: 1,
+                    strokeColor: '#ffffff',
+                    strokeWeight: 2,
+                  },
+                  zIndex: 1000,
+                });
+                companyMarkerRef.current = marker;
+              }
             });
         }
       } catch (error: any) {

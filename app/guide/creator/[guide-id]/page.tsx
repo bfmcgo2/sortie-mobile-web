@@ -238,13 +238,20 @@ export default function CreatorGuidePage() {
   // Map view (default after loading)
   if (isMobile) {
     // Convert guide to company data format for GuideMap component
-    // Only show company pin if there's a company_id or logo_url (non-empty)
-    const displayCompany: CompanyData | null = guide && (guide.company_id || (guide.logo_url && guide.logo_url.trim() !== '')) ? {
-      id: guide.company_id || guide.id,
-      name: guide.name,
-      logo: guide.logo_url || '',
-      coordinates: guide.coordinates || undefined,
-    } : null;
+    // Only show company logo pin if there's a company_id or logo_url (non-empty)
+    // Prefer company_pin_coordinates for the logo pin position, fall back to guide.coordinates
+    const displayCompany: CompanyData | null =
+      guide && (guide.company_id || (guide.logo_url && guide.logo_url.trim() !== ''))
+        ? {
+            id: guide.company_id || guide.id,
+            name: guide.name,
+            logo: guide.logo_url || '',
+            coordinates:
+              guide.company_pin_coordinates ||
+              guide.coordinates ||
+              undefined,
+          }
+        : null;
 
     return (
       <div className="h-full-viewport relative flex flex-col">
