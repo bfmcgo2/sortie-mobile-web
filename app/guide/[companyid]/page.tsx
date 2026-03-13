@@ -79,13 +79,6 @@ export default function GuidePage() {
     }
   }, [companyId]);
 
-  // Update document title when company is loaded
-  useEffect(() => {
-    if (company?.name) {
-      document.title = `${company.name} Guide`;
-    }
-  }, [company]);
-
   // Load locations when company is loaded (only on mobile)
   useEffect(() => {
     if (!company || !isMobile) {
