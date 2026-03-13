@@ -270,6 +270,9 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
               },
               title: location.name,
               content: content, // Green pin for company pins, default for video locations
+              // Location/video markers should always be clickable above optional/company pins
+              zIndex: 10,
+              collisionBehavior: google.maps.CollisionBehavior.REQUIRED_AND_HIDES_OPTIONAL,
             });
 
             marker.addListener('click', () => {
@@ -343,6 +346,9 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
                 },
                 title: pin.name,
                 content: pinElement,
+                // Non-video guide pins should also sit above company pins
+                zIndex: 10,
+                collisionBehavior: google.maps.CollisionBehavior.REQUIRED_AND_HIDES_OPTIONAL,
               });
 
               marker.addListener('click', () => {
@@ -393,7 +399,9 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
               },
               title: guide.company_pin_name || 'Company Pin',
               content: pinElement,
-              zIndex: 1000,
+              // Treat company pin as optional so it never hides required/location pins
+              zIndex: 1,
+              collisionBehavior: google.maps.CollisionBehavior.OPTIONAL,
             });
 
             companyPinMarkerRef.current = marker;
@@ -413,7 +421,8 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
                 strokeColor: '#ffffff',
                 strokeWeight: 3,
               },
-              zIndex: 1000,
+              // Lower zIndex so regular company pin is under other markers
+              zIndex: 1,
             });
 
             companyPinMarkerRef.current = marker;
@@ -481,8 +490,10 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
                   lng: company.coordinates!.lng,
                 },
                 title: company.name,
-            content: logoElement,
-            zIndex: 1000, // Higher z-index to appear above other markers
+                content: logoElement,
+                // Company logo pin is optional and should never block location pins
+                zIndex: 1,
+                collisionBehavior: google.maps.CollisionBehavior.OPTIONAL,
           });
 
           companyMarkerRef.current = marker;
@@ -575,7 +586,8 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
                     scaledSize: new google.maps.Size(48, 48),
                     anchor: new google.maps.Point(24, 24),
                   },
-                  zIndex: 1000,
+                  // Ensure company logo pin sits below other markers
+                  zIndex: 1,
                 });
 
                 companyMarkerRef.current = marker;
@@ -596,7 +608,8 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
                     strokeColor: '#ffffff',
                     strokeWeight: 2,
                   },
-                  zIndex: 1000,
+                  // Ensure company logo pin sits below other markers
+                  zIndex: 1,
                 });
                 companyMarkerRef.current = marker;
               }

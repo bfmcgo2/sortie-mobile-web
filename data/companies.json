@@ -48,6 +48,24 @@
       "lat": 22.222376666719388,
       "lng": -159.46834030000255
     }
+  },
+  {
+    "id": "2713826",
+    "name": "Read House",
+    "logo": "/companies/readhouse.jpg",
+    "coordinates": {
+      "lat": 35.04609330714863,
+      "lng": -85.31106999206551
+    }
+  },
+  {
+    "id": "2713827",
+    "name": "The Waymark Hotel",
+    "logo": "/companies/waymark.jpg",
+    "coordinates": {
+      "lat": 35.04740178862092,
+      "lng": -85.31014114929908
+    }
   }
 ]
 
