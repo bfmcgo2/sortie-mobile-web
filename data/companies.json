@@ -66,6 +66,15 @@
       "lat": 35.04740178862092,
       "lng": -85.31014114929908
     }
+  },
+  {
+    "id": "2713828",
+    "name": "Philadelphia Museum of Art",
+    "logo": "/companies/pham.jpg",
+    "coordinates": {
+      "lat": 39.9657708126526,
+      "lng": -75.18059123826009
+    }
   }
 ]
 
