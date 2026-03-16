@@ -75,6 +75,14 @@
       "lat": 39.9657708126526,
       "lng": -75.18059123826009
     }
+  },
+  {
+    "id": "2713829",
+    "name": "Temple University",
+    "logo": "/companies/temple.jpg",
+    "coordinates": {
+      "lat": 39.981450267743405,
+      "lng": -75.15534847408838
+    }
   }
 ]
-
