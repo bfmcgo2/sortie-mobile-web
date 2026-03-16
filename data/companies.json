@@ -84,5 +84,14 @@
       "lat": 39.981450267743405,
       "lng": -75.15534847408838
     }
+  },
+  {
+    "id": "2713830",
+    "name": "Florida Panthers",
+    "logo": "/companies/panthers.jpg",
+    "coordinates": {
+      "lat": 26.158650656448472,
+      "lng": -80.32556039368966
+    }
   }
 ]
