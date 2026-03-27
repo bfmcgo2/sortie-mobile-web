@@ -133,7 +133,22 @@ export default function CreatorGuidePage() {
   const handlePinClick = (pin: GuidePin) => {
     // Pins don't have videos, so open Google Maps
     console.log('Pin clicked:', pin.name);
-    
+
+    // Prefer custom pin link when provided
+    const rawLink = pin.pinLinkUrl?.trim();
+    if (rawLink) {
+      const normalizedLink = /^https?:\/\//i.test(rawLink) ? rawLink : `https://${rawLink}`;
+      try {
+        const url = new URL(normalizedLink);
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+          window.open(url.toString(), '_blank');
+          return;
+        }
+      } catch {
+        // Fall through to Google Maps fallback if custom URL is invalid
+      }
+    }
+
     if (pin.placeId) {
       window.open(`https://www.google.com/maps/place/?q=place_id:${pin.placeId}`, '_blank');
     } else if (pin.coordinates) {

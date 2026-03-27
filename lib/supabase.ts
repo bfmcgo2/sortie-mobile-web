@@ -497,6 +497,7 @@ export type GuidePin = {
   address?: string | null;
   coordinates: { lat: number; lng: number };
   placeId?: string | null;
+  pinLinkUrl?: string | null;
   description?: string | null;
   pinImageUrl?: string | null;
   displayOrder: number;
@@ -625,6 +626,7 @@ export async function fetchGuideById(guideId: string): Promise<GuideWithLocation
         address: pin.address || null,
         coordinates: coordinates,
         placeId: pin.place_id || null,
+        pinLinkUrl: pin.pin_link_url || null,
         description: pin.description || null,
         pinImageUrl: pin.pin_image_url || null,
         displayOrder: pin.display_order || 0,
