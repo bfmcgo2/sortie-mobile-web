@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Inter } from 'next/font/google';
 import { fetchGuideById, GuideLocation, Guide, GuidePin } from '@/lib/supabase';
+import { debugGuideLocation, warnGuideNoVideoOnClick } from '@/lib/guideDebug';
 import GuideMap from '@/components/GuideMap';
 import VideoSegmentPlayer from '@/components/VideoSegmentPlayer';
 import SVG2 from '@/components/svg/SVG2';
@@ -108,6 +109,8 @@ export default function CreatorGuidePage() {
   }, [guide, imageLoaded, loadingLocations]);
 
   const handleLocationClick = (location: GuideLocation) => {
+    debugGuideLocation('creator guide — location click', location);
+
     // Company pins don't have videos, so don't open video player
     if (location.isCompanyPin === true) {
       // For company pins, you could show location info or open Google Maps
@@ -127,6 +130,11 @@ export default function CreatorGuidePage() {
     if (location.video_url) {
       setSelectedLocation(location);
       setViewState('video');
+    } else {
+      warnGuideNoVideoOnClick(
+        location,
+        'Missing video_url (creator guide: check joined video is_public and video_url on videos row).'
+      );
     }
   };
 

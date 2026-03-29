@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { GuideLocation } from '@/lib/supabase';
+import { debugGuideLocation } from '@/lib/guideDebug';
 
 interface VideoSegmentPlayerProps {
   location: GuideLocation | null;
@@ -14,7 +15,8 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
   const hasStartedRef = useRef(false);
   const segmentEndTime = useRef<number | null>(null);
 
-  useEffect(() => {
+  // Run after DOM commit so videoRef is attached when opening the player.
+  useLayoutEffect(() => {
     if (!location || !videoRef.current) return;
 
     const video = videoRef.current;
@@ -36,7 +38,11 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
         video.muted = false;
         video.volume = 1.0;
         video.play().catch((error) => {
-          console.error('Error playing video:', error);
+          console.error('[Sortie Guide] VideoSegmentPlayer: play() rejected', {
+            id: location.id,
+            name: location.name,
+            error,
+          });
         });
         hasStartedRef.current = true;
         setIsPlaying(true);
@@ -82,6 +88,14 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
   };
 
   if (!location || !location.video_url || location.isCompanyPin === true) {
+    if (location && (!location.video_url || location.isCompanyPin === true)) {
+      console.warn('[Sortie Guide] VideoSegmentPlayer: not rendering', {
+        id: location.id,
+        name: location.name,
+        isCompanyPin: location.isCompanyPin,
+        hasVideoUrl: Boolean(location.video_url),
+      });
+    }
     return null;
   }
 
@@ -95,6 +109,26 @@ export default function VideoSegmentPlayer({ location, onClose }: VideoSegmentPl
         playsInline
         muted={false}
         autoPlay
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          debugGuideLocation('VideoSegmentPlayer — loadedmetadata', location, {
+            duration: v.duration,
+            currentTime: v.currentTime,
+            seekTo: location.time_start_sec,
+            segmentEnd: location.time_end_sec,
+          });
+        }}
+        onError={(e) => {
+          const v = e.currentTarget;
+          const err = v.error;
+          console.error('[Sortie Guide] VideoSegmentPlayer: <video> error', {
+            id: location.id,
+            name: location.name,
+            src: location.video_url?.slice(0, 120),
+            code: err?.code,
+            message: err?.message,
+          });
+        }}
       />
 
       {/* Close Button */}

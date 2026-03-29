@@ -6,6 +6,7 @@ import { Inter } from 'next/font/google';
 import companiesData from '@/data/companies.json';
 import companyLocationsData from '@/data/company-locations.json';
 import { fetchCompanyGuideLocations, GuideLocation } from '@/lib/supabase';
+import { debugGuideLocation, warnGuideNoVideoOnClick } from '@/lib/guideDebug';
 import GuideMap from '@/components/GuideMap';
 import VideoSegmentPlayer from '@/components/VideoSegmentPlayer';
 import SVG2 from '@/components/svg/SVG2';
@@ -128,6 +129,8 @@ export default function GuidePage() {
   }, [company, imageLoaded, loadingLocations]);
 
   const handleLocationClick = (location: GuideLocation) => {
+    debugGuideLocation('static guide — location click', location);
+
     // Company pins don't have videos, so don't open video player
     if (location.isCompanyPin === true) {
       // For company pins, you could show location info or open Google Maps
@@ -147,6 +150,11 @@ export default function GuidePage() {
     if (location.video_url) {
       setSelectedLocation(location);
       setViewState('video');
+    } else {
+      warnGuideNoVideoOnClick(
+        location,
+        'Missing video_url after fetch (check locations.video_id and videos row / R2 URL conversion).'
+      );
     }
   };
 
