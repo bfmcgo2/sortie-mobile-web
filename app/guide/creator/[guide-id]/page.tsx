@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Inter } from 'next/font/google';
 import { fetchGuideById, GuideLocation, Guide, GuidePin } from '@/lib/supabase';
 import { debugGuideLocation, warnGuideNoVideoOnClick } from '@/lib/guideDebug';
 import GuideMap from '@/components/GuideMap';
+import GuideHeaderBar from '@/components/GuideHeaderBar';
+import GuideLocationsMenuOverlay from '@/components/GuideLocationsMenuOverlay';
+import { locationsToMenuItems, pinsToMenuItems } from '@/lib/guideMenuItems';
+import GuideTitleH1 from '@/components/GuideTitleH1';
 import VideoSegmentPlayer from '@/components/VideoSegmentPlayer';
 import SVG2 from '@/components/svg/SVG2';
 
@@ -26,6 +30,8 @@ interface CompanyData {
 
 type ViewState = 'loading' | 'map' | 'video';
 
+const MENU_MAP_ZOOM = 17;
+
 export default function CreatorGuidePage() {
   const params = useParams();
   const guideId = params['guide-id'] as string | undefined;
@@ -35,6 +41,13 @@ export default function CreatorGuidePage() {
   const [locations, setLocations] = useState<GuideLocation[]>([]);
   const [pins, setPins] = useState<GuidePin[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<GuideLocation | null>(null);
+  const [mapFocus, setMapFocus] = useState<{
+    lat: number;
+    lng: number;
+    zoom?: number;
+  } | null>(null);
+  const [locationsMenuOpen, setLocationsMenuOpen] = useState(false);
+  const [mapRecenterNonce, setMapRecenterNonce] = useState(0);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [isMobile, setIsMobile] = useState(true);
 
@@ -111,6 +124,10 @@ export default function CreatorGuidePage() {
   const handleLocationClick = (location: GuideLocation) => {
     debugGuideLocation('creator guide — location click', location);
 
+    if (location.coordinates) {
+      setMapFocus({ lat: location.coordinates.lat, lng: location.coordinates.lng });
+    }
+
     // Company pins don't have videos, so don't open video player
     if (location.isCompanyPin === true) {
       // For company pins, you could show location info or open Google Maps
@@ -142,6 +159,10 @@ export default function CreatorGuidePage() {
     // Pins don't have videos, so open Google Maps
     console.log('Pin clicked:', pin.name);
 
+    if (pin.coordinates) {
+      setMapFocus({ lat: pin.coordinates.lat, lng: pin.coordinates.lng });
+    }
+
     // Prefer custom pin link when provided
     const rawLink = pin.pinLinkUrl?.trim();
     if (rawLink) {
@@ -168,6 +189,11 @@ export default function CreatorGuidePage() {
     setSelectedLocation(null);
     setViewState('map');
   };
+
+  const menuMapItems = useMemo(
+    () => [...locationsToMenuItems(locations), ...pinsToMenuItems(pins)],
+    [locations, pins]
+  );
 
   // Desktop message
   if (!isMobile) {
@@ -222,13 +248,14 @@ export default function CreatorGuidePage() {
           </div>
         )}
 
-        {/* Guide Name */}
-        <p 
-          className="text-2xl font-bold text-center mb-6"
-          style={{ color: '#fdf5e2', fontWeight: 700 }}
-        >
-          {guide?.name || 'Guide'} Guide
-        </p>
+        {guide && (
+          <p
+            className="text-2xl font-bold text-center mb-6"
+            style={{ color: '#fdf5e2', fontWeight: 700 }}
+          >
+            {guide.name} Guide
+          </p>
+        )}
 
         {/* Loading Text with Animated Dots */}
         <div className="flex items-center justify-center gap-1">
@@ -246,20 +273,8 @@ export default function CreatorGuidePage() {
     );
   }
 
-  // Video view
-  if (viewState === 'video' && isMobile) {
-    return (
-      <div className="h-full-viewport">
-        <VideoSegmentPlayer
-          location={selectedLocation}
-          onClose={handleCloseVideo}
-        />
-      </div>
-    );
-  }
-
-  // Map view (default after loading)
-  if (isMobile) {
+  // Map + optional video overlay (map stays mounted so camera is preserved when closing video)
+  if (isMobile && (viewState === 'map' || viewState === 'video')) {
     // Convert guide to company data format for GuideMap component
     // Only show company logo pin if there's a company_id or logo_url (non-empty)
     // Prefer company_pin_coordinates for the logo pin position, fall back to guide.coordinates
@@ -277,35 +292,63 @@ export default function CreatorGuidePage() {
         : null;
 
     return (
-      <div className="h-full-viewport relative flex flex-col">
+      <div className="guide-app-shell h-full-viewport relative flex flex-col">
         {/* Header Bar */}
         <div 
-          className="flex items-center justify-center z-50 flex-shrink-0 pt-safe"
+          className="relative z-[160] flex w-full flex-shrink-0 items-center justify-center pt-safe"
           style={{ 
             padding: '10px 0',
             backgroundColor: '#18204aff',
             paddingTop: `max(10px, calc(10px + env(safe-area-inset-top, 0px)))`
           }}
         >
-          <p 
-            className={`font-bold text-center ${inter.className}`}
-            style={{ color: '#fdf5e2', fontWeight: 700, fontSize: '30px' }}
+          <GuideHeaderBar
+            titleColor="#fdf5e2"
+            menuOpen={locationsMenuOpen}
+            onMenuClick={() => setLocationsMenuOpen((o) => !o)}
           >
-            {guide?.name ? `${guide.name} Guide` : 'Guide'}
-          </p>
+            <GuideTitleH1
+              className={inter.className}
+              style={{ color: '#fdf5e2', fontWeight: 700 }}
+              onClick={() => {
+                setMapFocus(null);
+                setMapRecenterNonce((n) => n + 1);
+              }}
+            >
+              {guide?.name ? `${guide.name} Guide` : 'Guide'}
+            </GuideTitleH1>
+          </GuideHeaderBar>
         </div>
-        {/* Map Container - takes remaining space */}
-        <div className="flex-1 relative overflow-hidden" style={{ minHeight: 0 }}>
+        <div className="relative z-0 min-h-0 flex-1 overflow-hidden">
           <GuideMap
             locations={locations}
             pins={pins}
-            isActive={viewState === 'map'}
+            isActive
+            mapFocus={mapFocus}
+            resetBoundsNonce={mapRecenterNonce}
             onLocationClick={handleLocationClick}
             onPinClick={handlePinClick}
             company={displayCompany}
             guide={guide}
           />
         </div>
+        {viewState === 'video' && (
+          <div className="fixed inset-0 z-[200] bg-black">
+            <VideoSegmentPlayer
+              location={selectedLocation}
+              onClose={handleCloseVideo}
+            />
+          </div>
+        )}
+        <GuideLocationsMenuOverlay
+          open={locationsMenuOpen}
+          items={menuMapItems}
+          onNavigateToItem={(item) => {
+            setMapFocus({ lat: item.lat, lng: item.lng, zoom: MENU_MAP_ZOOM });
+            setLocationsMenuOpen(false);
+          }}
+          titleFontClassName={inter.className}
+        />
       </div>
     );
   }

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
+import { MarkerClusterer } from '@googlemaps/markerclusterer';
+import { GuideMapClusterRenderer } from '@/lib/guideMapClusterRenderer';
 import { GuideLocation } from '@/lib/supabase';
 
 interface CompanyData {
@@ -19,11 +21,16 @@ import { GuidePin } from '@/lib/supabase';
 interface GuideMapProps {
   locations: GuideLocation[];
   pins?: GuidePin[]; // Non-video pins
+  /** When false, marker setup is skipped (e.g. tab inactive). Map instance can stay mounted. */
   isActive: boolean;
+  /** Pan/zoom to these coordinates when set (e.g. user tapped a pin or picked from menu). */
+  mapFocus?: { lat: number; lng: number; zoom?: number } | null;
   onLocationClick?: (location: GuideLocation) => void;
   onPinClick?: (pin: GuidePin) => void;
   company?: CompanyData | null;
   guide?: { company_pin_coordinates?: { lat: number; lng: number } | null; company_pin_name?: string | null } | null;
+  /** Increment (e.g. title tap) to fit the map to all pins/locations with the same padding as the initial view. */
+  resetBoundsNonce?: number;
 }
 
 const mapContainerStyle = {
@@ -38,10 +45,63 @@ const defaultCenter = {
 
 const defaultZoom = 10;
 
+/** Same padding as initial fitBounds in the marker effect */
+const FIT_BOUNDS_PADDING = { top: 100, right: 50, bottom: 200, left: 50 };
+
+function buildGuideMapLatLngBounds(
+  locations: GuideLocation[],
+  pins: GuidePin[],
+  company: CompanyData | null | undefined,
+  guide: GuideMapProps['guide']
+): google.maps.LatLngBounds | null {
+  if (typeof google === 'undefined' || !google.maps) return null;
+  const bounds = new google.maps.LatLngBounds();
+
+  if (guide?.company_pin_coordinates) {
+    bounds.extend({
+      lat: guide.company_pin_coordinates.lat,
+      lng: guide.company_pin_coordinates.lng,
+    });
+  }
+
+  if (company?.coordinates && (company?.id || (company?.logo && company.logo.trim() !== ''))) {
+    bounds.extend({
+      lat: company.coordinates.lat,
+      lng: company.coordinates.lng,
+    });
+  }
+
+  locations.forEach((loc) => {
+    bounds.extend({
+      lat: loc.coordinates.lat,
+      lng: loc.coordinates.lng,
+    });
+  });
+
+  pins.forEach((pin) => {
+    bounds.extend({
+      lat: pin.coordinates.lat,
+      lng: pin.coordinates.lng,
+    });
+  });
+
+  return bounds.isEmpty() ? null : bounds;
+}
+
 // Define libraries as a constant to avoid the warning
 const LIBRARIES: ("marker")[] = ['marker'];
 
-export default function GuideMap({ locations, pins = [], isActive, onLocationClick, onPinClick, company, guide }: GuideMapProps) {
+export default function GuideMap({
+  locations,
+  pins = [],
+  isActive,
+  mapFocus = null,
+  onLocationClick,
+  onPinClick,
+  company,
+  guide,
+  resetBoundsNonce = 0,
+}: GuideMapProps) {
   console.log('🗺️ GuideMap rendered with locations:', locations?.length, 'isActive:', isActive);
   console.log('🗺️ GuideMap locations type:', typeof locations, 'isArray?', Array.isArray(locations), 'constructor:', locations?.constructor?.name);
   if (locations && locations.length > 0) {
@@ -56,14 +116,17 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
   const pinRegularMarkersRef = useRef<google.maps.Marker[]>([]);
   const companyPinMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
   const companyMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
+  const markerClustererRef = useRef<MarkerClusterer | null>(null);
   const userLocationMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
   const watchPositionIdRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [useAdvancedMarkers, setUseAdvancedMarkers] = useState(true);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  /** After first fitBounds, stop passing center/zoom props so React re-rends don't reset the camera. */
+  const [mapCameraOwned, setMapCameraOwned] = useState(false);
+  const initialFitSignatureRef = useRef<string>('');
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-  const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || '';
+  const mapId = (process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || '').trim();
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -80,6 +143,51 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
       setError(null);
     }
   }, [loadError]);
+
+  const lastFittedDataSignatureRef = useRef<string>('');
+
+  // Pan / zoom to a pin when the parent sets mapFocus (e.g. after tap or menu pick).
+  useEffect(() => {
+    if (!mapFocus || !mapRef.current || !mapReady || !isLoaded) return;
+    const map = mapRef.current;
+    map.panTo({ lat: mapFocus.lat, lng: mapFocus.lng });
+    if (typeof mapFocus.zoom === 'number') {
+      map.setZoom(mapFocus.zoom);
+    } else {
+      const z = map.getZoom();
+      if (typeof z === 'number' && z < 15) {
+        map.setZoom(15);
+      }
+    }
+  }, [mapFocus, mapReady, isLoaded]);
+
+  const lastAppliedResetBoundsNonceRef = useRef(0);
+
+  useEffect(() => {
+    if (!resetBoundsNonce) return;
+    if (resetBoundsNonce === lastAppliedResetBoundsNonceRef.current) return;
+    if (!mapRef.current || !mapReady || !isLoaded || !isActive) return;
+
+    const bounds = buildGuideMapLatLngBounds(locations, pins, company, guide);
+    if (!bounds) return;
+
+    try {
+      mapRef.current.fitBounds(bounds, FIT_BOUNDS_PADDING);
+      lastAppliedResetBoundsNonceRef.current = resetBoundsNonce;
+      setMapCameraOwned(true);
+    } catch (err) {
+      console.error('GuideMap reset bounds:', err);
+    }
+  }, [
+    resetBoundsNonce,
+    mapReady,
+    isLoaded,
+    isActive,
+    locations,
+    pins,
+    company,
+    guide,
+  ]);
 
   // Calculate map bounds to fit all locations and company pin
   const mapOptions = useMemo(() => {
@@ -162,16 +270,13 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
       return;
     }
 
-    if (locations.length === 0) {
-      console.log('🗺️ Marker useEffect - no locations, clearing markers');
-      markersRef.current.forEach(marker => marker.map = null);
-      markersRef.current = [];
-      regularMarkersRef.current.forEach(marker => marker.setMap(null));
-      regularMarkersRef.current = [];
-      return;
-    }
-
-    console.log('🗺️ Marker useEffect - creating markers for', locations.length, 'locations');
+    console.log(
+      '🗺️ Marker useEffect - creating markers for',
+      locations.length,
+      'locations,',
+      pins.length,
+      'pins'
+    );
     
     const map = mapRef.current;
     if (!map) {
@@ -188,6 +293,15 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
       console.log('🗺️ Marker useEffect - hasMapId:', hasMapId);
       const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapId;
       console.log('🗺️ Marker useEffect - hasAdvancedMarkerSupport:', hasAdvancedMarkerSupport);
+
+      if (markerClustererRef.current) {
+        markerClustererRef.current.setMap(null);
+        markerClustererRef.current = null;
+      }
+
+      const clusterMarkers: Array<
+        google.maps.Marker | google.maps.marker.AdvancedMarkerElement
+      > = [];
 
       // Clear existing markers
       console.log('🗺️ Marker useEffect - clearing existing markers');
@@ -210,7 +324,6 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
           // Different styling for company pins vs video locations
           const isCompanyPin = location.isCompanyPin === true;
           const marker = new google.maps.Marker({
-            map: map,
             position: {
               lat: location.coordinates.lat,
               lng: location.coordinates.lng,
@@ -233,6 +346,7 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
           });
 
           regularMarkersRef.current.push(marker);
+          clusterMarkers.push(marker);
           } catch (error: any) {
             console.error(`❌ Error creating marker ${index}:`, error);
             console.error('❌ Error stack:', error?.stack);
@@ -263,7 +377,7 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
             }
             
             const marker = new google.maps.marker.AdvancedMarkerElement({
-              map: map,
+              map: null,
               position: {
                 lat: location.coordinates.lat,
                 lng: location.coordinates.lng,
@@ -279,6 +393,7 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
             });
 
             markersRef.current.push(marker);
+            clusterMarkers.push(marker);
           } catch (error: any) {
             console.error(`❌ Error creating advanced marker ${index}:`, error);
             console.error('❌ Error stack:', error?.stack);
@@ -296,7 +411,6 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
           pins.forEach((pin, index) => {
             try {
               const marker = new google.maps.Marker({
-                map: map,
                 position: {
                   lat: pin.coordinates.lat,
                   lng: pin.coordinates.lng,
@@ -319,6 +433,7 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
               });
 
               pinRegularMarkersRef.current.push(marker);
+              clusterMarkers.push(marker);
             } catch (error: any) {
               console.error(`❌ Error creating pin marker ${index}:`, error);
             }
@@ -336,7 +451,7 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
               pinElement.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
               
               const marker = new google.maps.marker.AdvancedMarkerElement({
-                map: map,
+                map: null,
                 position: {
                   lat: pin.coordinates.lat,
                   lng: pin.coordinates.lng,
@@ -352,13 +467,22 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
               });
 
               pinMarkersRef.current.push(marker);
+              clusterMarkers.push(marker);
             } catch (error: any) {
               console.error(`❌ Error creating advanced pin marker ${index}:`, error);
             }
           });
         }
       }
-      
+
+      if (clusterMarkers.length > 0) {
+        markerClustererRef.current = new MarkerClusterer({
+          map,
+          markers: clusterMarkers,
+          renderer: new GuideMapClusterRenderer(Boolean(mapId)),
+        });
+      }
+
       // Create company pin marker from guide (if present) - Green color
       if (guide?.company_pin_coordinates) {
         console.log('🗺️ Creating company pin marker from guide');
@@ -607,55 +731,30 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
       }
     }
 
-    // Fit map to bounds
-    const bounds = new google.maps.LatLngBounds();
-    
-    // Add company pin from guide to bounds
-    if (guide?.company_pin_coordinates) {
-      bounds.extend({
-        lat: guide.company_pin_coordinates.lat,
-        lng: guide.company_pin_coordinates.lng,
-      });
-    }
-    
-    // Add company coordinates to bounds if has company_id or logo (non-empty)
-    if (company?.coordinates && (company?.id || (company?.logo && company.logo.trim() !== ''))) {
-      bounds.extend({
-        lat: company.coordinates!.lat,
-        lng: company.coordinates!.lng,
-      });
-    }
-    
-    // Add location coordinates to bounds
-    locations.forEach(loc => {
-      bounds.extend({
-        lat: loc.coordinates.lat,
-        lng: loc.coordinates.lng,
-      });
-    });
-    
-    // Add pin coordinates to bounds
-    pins.forEach(pin => {
-      bounds.extend({
-        lat: pin.coordinates.lat,
-        lng: pin.coordinates.lng,
-      });
-    });
+    const bounds = buildGuideMapLatLngBounds(locations, pins, company, guide);
 
-    if (bounds.isEmpty() === false) {
-      try {
-        map.fitBounds(bounds, {
-          top: 100,
-          right: 50,
-          bottom: 200,
-          left: 50,
-        });
-      } catch (error: any) {
-        console.error('Error fitting bounds:', error);
+    const locationSig = [...locations].map((l) => l.id).sort().join(',');
+    const pinSig = [...pins].map((p) => p.id).sort().join(',');
+    const dataSig = `${locationSig}|${pinSig}`;
+
+    if (bounds) {
+      const shouldFitBounds = dataSig !== lastFittedDataSignatureRef.current;
+      if (shouldFitBounds) {
+        try {
+          map.fitBounds(bounds, FIT_BOUNDS_PADDING);
+          lastFittedDataSignatureRef.current = dataSig;
+          setMapCameraOwned(true);
+        } catch (error: any) {
+          console.error('Error fitting bounds:', error);
+        }
       }
     }
 
     return () => {
+      if (markerClustererRef.current) {
+        markerClustererRef.current.setMap(null);
+        markerClustererRef.current = null;
+      }
       markersRef.current.forEach(marker => marker.map = null);
       markersRef.current = [];
       regularMarkersRef.current.forEach(marker => marker.setMap(null));
@@ -793,16 +892,9 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
-        setUserLocation(location);
         console.log('📍 User location updated:', location);
 
-        // Center map on user location (only on first update)
-        if (!userLocation && mapRef.current) {
-          mapRef.current.setCenter(location);
-          mapRef.current.setZoom(15);
-        }
-
-        // Update user location marker
+        // Only move the blue dot — never pan/zoom the map (user controls the camera).
         updateUserLocationMarker(location);
       },
       (error) => {
@@ -862,8 +954,8 @@ export default function GuideMap({ locations, pins = [], isActive, onLocationCli
       <div className="relative w-full h-full">
         <GoogleMap
           mapContainerStyle={mapContainerStyle}
-          center={mapOptions.center}
-          zoom={mapOptions.center === defaultCenter ? defaultZoom : undefined}
+          center={mapCameraOwned ? undefined : mapOptions.center}
+          zoom={mapCameraOwned ? undefined : mapOptions.center === defaultCenter ? defaultZoom : undefined}
           onLoad={onLoad}
           onUnmount={onUnmount}
           options={{

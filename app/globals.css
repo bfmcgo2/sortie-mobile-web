@@ -108,3 +108,27 @@ body {
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
 }
+
+/* Matches guide map/video header: safe top + vertical padding + GuideHeaderBar row (3rem) */
+.guide-app-shell {
+  --guide-header-height: calc(
+    max(10px, calc(10px + env(safe-area-inset-top, 0px))) + 3rem + 10px
+  );
+}
+
+/* Guide hamburger menu: staggered CTA entrance */
+@keyframes guide-menu-cta-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.guide-menu-cta {
+  animation: guide-menu-cta-in 0.42s ease-out forwards;
+  opacity: 0;
+}
