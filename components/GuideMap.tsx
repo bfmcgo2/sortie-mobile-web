@@ -119,6 +119,8 @@ export default function GuideMap({
   const markerClustererRef = useRef<MarkerClusterer | null>(null);
   const userLocationMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
   const watchPositionIdRef = useRef<number | null>(null);
+  const pinImagePreloadCacheRef = useRef<Map<string, Promise<boolean>>>(new Map());
+  const pinImageIconCacheRef = useRef<Map<string, Promise<string | null>>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [useAdvancedMarkers, setUseAdvancedMarkers] = useState(true);
@@ -145,6 +147,101 @@ export default function GuideMap({
   }, [loadError]);
 
   const lastFittedDataSignatureRef = useRef<string>('');
+
+  const toProxiedImageUrl = (remoteUrl: string) =>
+    `/api/image-proxy?url=${encodeURIComponent(remoteUrl)}`;
+
+  const preloadImage = (url: string): Promise<boolean> => {
+    const cached = pinImagePreloadCacheRef.current.get(url);
+    if (cached) return cached;
+
+    const p = new Promise<boolean>((resolve) => {
+      try {
+        const img = new Image();
+        // Do NOT set crossOrigin here.
+        // - For AdvancedMarkerElement (<img>), CORS is not required to display.
+        // - Setting crossOrigin='anonymous' will cause the browser to require CORS headers,
+        //   which many R2.dev URLs don't provide by default.
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+      } catch {
+        resolve(false);
+      }
+    });
+
+    pinImagePreloadCacheRef.current.set(url, p);
+    return p;
+  };
+
+  const getCircularPinIconDataUrl = (url: string, sizePx: number): Promise<string | null> => {
+    const key = `${url}|${sizePx}`;
+    const cached = pinImageIconCacheRef.current.get(key);
+    if (cached) return cached;
+
+    const p = new Promise<string | null>((resolve) => {
+      const img = new Image();
+      // Intentionally NOT setting crossOrigin here.
+      // If the image host does not send CORS headers, canvas rendering would fail anyway.
+      // We keep this helper for future use when images are served with proper CORS.
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = sizePx;
+          canvas.height = sizePx;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(null);
+
+          // Subtle shadow so it reads on the map.
+          ctx.clearRect(0, 0, sizePx, sizePx);
+          ctx.shadowColor = 'rgba(0,0,0,0.35)';
+          ctx.shadowBlur = 10;
+          ctx.shadowOffsetY = 2;
+
+          const center = sizePx / 2;
+          const radius = center - 2;
+
+          // Draw base circle (shadow applies).
+          ctx.beginPath();
+          ctx.arc(center, center, radius, 0, 2 * Math.PI);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+
+          // Clip to circle for image crop.
+          ctx.save();
+          ctx.shadowColor = 'transparent';
+          ctx.beginPath();
+          ctx.arc(center, center, radius - 3, 0, 2 * Math.PI);
+          ctx.clip();
+
+          // Cover-crop into circle.
+          const srcSize = Math.min(img.width, img.height);
+          const sx = (img.width - srcSize) / 2;
+          const sy = (img.height - srcSize) / 2;
+          const destSize = (radius - 3) * 2;
+          ctx.drawImage(img, sx, sy, srcSize, srcSize, center - destSize / 2, center - destSize / 2, destSize, destSize);
+          ctx.restore();
+
+          // White border ring (no shadow).
+          ctx.shadowColor = 'transparent';
+          ctx.beginPath();
+          ctx.arc(center, center, radius - 1, 0, 2 * Math.PI);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          resolve(canvas.toDataURL('image/png'));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+
+    pinImageIconCacheRef.current.set(key, p);
+    return p;
+  };
 
   // Pan / zoom to a pin when the parent sets mapFocus (e.g. after tap or menu pick).
   useEffect(() => {
@@ -286,6 +383,8 @@ export default function GuideMap({
     
     console.log('🗺️ Marker useEffect - map:', map, 'type:', typeof map);
     
+    let cancelled = false;
+
     try {
       // Check for mapId - only use env var to avoid calling getMapId which causes context issues
       // The getMapId() method has context issues when called, so we'll just rely on the env var
@@ -402,86 +501,155 @@ export default function GuideMap({
         });
       }
       
-      // Create markers for pins (non-video locations) - Orange color
+      // Create markers for pins (non-video locations) - Orange color, or pin image when available
       if (pins.length > 0) {
         console.log('🗺️ Creating markers for', pins.length, 'pins');
-        
-        if (!hasAdvancedMarkerSupport) {
-          // Regular markers for pins
-          pins.forEach((pin, index) => {
-            try {
-              const marker = new google.maps.Marker({
-                position: {
-                  lat: pin.coordinates.lat,
-                  lng: pin.coordinates.lng,
-                },
-                title: pin.name,
-                icon: {
-                  path: google.maps.SymbolPath.CIRCLE,
-                  scale: 9, // Slightly larger than video locations
-                  fillColor: '#FF9500', // Orange for pins
-                  fillOpacity: 1,
-                  strokeColor: '#ffffff',
-                  strokeWeight: 2,
-                },
-              });
 
-              marker.addListener('click', () => {
-                if (onPinClick) {
-                  onPinClick(pin);
+        const pinsWithImages = pins.filter((p) => typeof p.pinImageUrl === 'string' && p.pinImageUrl.trim() !== '');
+
+        // Preload image URLs so we can build markers without a flash/flicker.
+        // (Browser cache makes subsequent marker rebuilds instant.)
+        void (async () => {
+          if (pinsWithImages.length > 0) {
+            await Promise.all(
+              pinsWithImages.map((p) => {
+                const raw = p.pinImageUrl!.trim();
+                // Preload via proxy so we can crop to a circle without Cloudflare CORS.
+                return preloadImage(toProxiedImageUrl(raw));
+              })
+            );
+          }
+
+          if (cancelled) return;
+
+          if (!hasAdvancedMarkerSupport) {
+            // Regular markers for pins
+            for (let index = 0; index < pins.length; index++) {
+              const pin = pins[index];
+              try {
+                const rawUrl = pin.pinImageUrl?.trim();
+                const proxiedUrl = rawUrl ? toProxiedImageUrl(rawUrl) : null;
+                const iconDataUrl = proxiedUrl ? await getCircularPinIconDataUrl(proxiedUrl, 56) : null;
+                let marker: google.maps.Marker;
+                if (iconDataUrl) {
+                  marker = new google.maps.Marker({
+                    position: { lat: pin.coordinates.lat, lng: pin.coordinates.lng },
+                    title: pin.name,
+                    icon: {
+                      url: iconDataUrl,
+                      scaledSize: new google.maps.Size(44, 44),
+                      anchor: new google.maps.Point(22, 22),
+                    },
+                  });
+                } else if (rawUrl) {
+                  // If proxy/canvas fails, still try direct image URL (square) rather than dropping to orange.
+                  marker = new google.maps.Marker({
+                    position: { lat: pin.coordinates.lat, lng: pin.coordinates.lng },
+                    title: pin.name,
+                    icon: {
+                      url: rawUrl,
+                      scaledSize: new google.maps.Size(44, 44),
+                      anchor: new google.maps.Point(22, 22),
+                    },
+                  });
+                } else {
+                  marker = new google.maps.Marker({
+                    position: { lat: pin.coordinates.lat, lng: pin.coordinates.lng },
+                    title: pin.name,
+                    icon: {
+                      path: google.maps.SymbolPath.CIRCLE,
+                      scale: 9, // Slightly larger than video locations
+                      fillColor: '#FF9500', // Orange for pins
+                      fillOpacity: 1,
+                      strokeColor: '#ffffff',
+                      strokeWeight: 2,
+                    },
+                  });
                 }
-              });
+                if (cancelled) return;
 
-              pinRegularMarkersRef.current.push(marker);
-              clusterMarkers.push(marker);
-            } catch (error: any) {
-              console.error(`❌ Error creating pin marker ${index}:`, error);
+                marker.addListener('click', () => {
+                  if (onPinClick) onPinClick(pin);
+                });
+
+                pinRegularMarkersRef.current.push(marker);
+                clusterMarkers.push(marker);
+              } catch (error: any) {
+                console.error(`❌ Error creating pin marker ${index}:`, error);
+              }
             }
-          });
-        } else {
-          // Advanced markers for pins
-          pins.forEach((pin, index) => {
-            try {
-              const pinElement = document.createElement('div');
-              pinElement.style.width = '18px';
-              pinElement.style.height = '18px';
-              pinElement.style.borderRadius = '50%';
-              pinElement.style.backgroundColor = '#FF9500'; // Orange for pins
-              pinElement.style.border = '3px solid white';
-              pinElement.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-              
-              const marker = new google.maps.marker.AdvancedMarkerElement({
-                map: null,
-                position: {
-                  lat: pin.coordinates.lat,
-                  lng: pin.coordinates.lng,
-                },
-                title: pin.name,
-                content: pinElement,
-              });
+          } else {
+            // Advanced markers for pins
+            pins.forEach((pin, index) => {
+              try {
+                const root = document.createElement('div');
+                root.style.width = '34px';
+                root.style.height = '34px';
+                root.style.borderRadius = '50%';
+                root.style.border = '3px solid white';
+                root.style.boxShadow = '0 2px 10px rgba(0,0,0,0.35)';
+                root.style.overflow = 'hidden';
+                root.style.background = '#FF9500';
 
-              marker.addListener('click', () => {
-                if (onPinClick) {
-                  onPinClick(pin);
+                const rawUrl = pin.pinImageUrl?.trim();
+                if (rawUrl) {
+                  const img = document.createElement('img');
+                  img.src = rawUrl;
+                  img.alt = pin.name;
+                  img.decoding = 'async';
+                  img.loading = 'eager';
+                  img.style.width = '100%';
+                  img.style.height = '100%';
+                  img.style.objectFit = 'cover';
+                  img.style.display = 'block';
+                  img.onerror = () => {
+                    // Keep orange fallback if image fails.
+                    root.style.background = '#FF9500';
+                  };
+                  root.appendChild(img);
                 }
-              });
 
-              pinMarkersRef.current.push(marker);
-              clusterMarkers.push(marker);
-            } catch (error: any) {
-              console.error(`❌ Error creating advanced pin marker ${index}:`, error);
-            }
+                const marker = new google.maps.marker.AdvancedMarkerElement({
+                  map: null,
+                  position: { lat: pin.coordinates.lat, lng: pin.coordinates.lng },
+                  title: pin.name,
+                  content: root,
+                });
+
+                marker.addListener('click', () => {
+                  if (onPinClick) onPinClick(pin);
+                });
+
+                pinMarkersRef.current.push(marker);
+                clusterMarkers.push(marker);
+              } catch (error: any) {
+                console.error(`❌ Error creating advanced pin marker ${index}:`, error);
+              }
+            });
+          }
+
+          if (clusterMarkers.length > 0) {
+            markerClustererRef.current = new MarkerClusterer({
+              map,
+              markers: clusterMarkers,
+              renderer: new GuideMapClusterRenderer(Boolean(mapId)),
+            });
+          }
+        })();
+      } else {
+        // No pins: cluster locations only (if any)
+        if (clusterMarkers.length > 0) {
+          markerClustererRef.current = new MarkerClusterer({
+            map,
+            markers: clusterMarkers,
+            renderer: new GuideMapClusterRenderer(Boolean(mapId)),
           });
         }
       }
 
-      if (clusterMarkers.length > 0) {
-        markerClustererRef.current = new MarkerClusterer({
-          map,
-          markers: clusterMarkers,
-          renderer: new GuideMapClusterRenderer(Boolean(mapId)),
-        });
-      }
+      // NOTE: MarkerClusterer instantiation happens above:
+      // - after pins are created (async) if pins exist
+      // - immediately if there are no pins
 
       // Create company pin marker from guide (if present) - Green color
       if (guide?.company_pin_coordinates) {
@@ -751,6 +919,7 @@ export default function GuideMap({
     }
 
     return () => {
+      cancelled = true;
       if (markerClustererRef.current) {
         markerClustererRef.current.setMap(null);
         markerClustererRef.current = null;

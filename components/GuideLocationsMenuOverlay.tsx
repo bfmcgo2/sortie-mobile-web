@@ -89,7 +89,7 @@ export default function GuideLocationsMenuOverlay({
 
   return (
     <div
-      className={`fixed inset-0 z-[150] flex min-h-0 flex-col px-safe transition-opacity ease-out ${titleFontClassName}`}
+      className={`absolute inset-0 z-[150] flex min-h-0 flex-col px-safe transition-opacity ease-out ${titleFontClassName}`}
       style={{
         backgroundColor: MENU_BG,
         color: MENU_FG,

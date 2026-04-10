@@ -10,6 +10,7 @@ import GuideHeaderBar from '@/components/GuideHeaderBar';
 import GuideLocationsMenuOverlay from '@/components/GuideLocationsMenuOverlay';
 import { locationsToMenuItems, pinsToMenuItems } from '@/lib/guideMenuItems';
 import GuideTitleH1 from '@/components/GuideTitleH1';
+import GuideViewportShell from '@/components/GuideViewportShell';
 import VideoSegmentPlayer from '@/components/VideoSegmentPlayer';
 import SVG2 from '@/components/svg/SVG2';
 
@@ -49,19 +50,6 @@ export default function CreatorGuidePage() {
   const [locationsMenuOpen, setLocationsMenuOpen] = useState(false);
   const [mapRecenterNonce, setMapRecenterNonce] = useState(0);
   const [loadingLocations, setLoadingLocations] = useState(false);
-  const [isMobile, setIsMobile] = useState(true);
-
-  // Check if user is on mobile
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   useEffect(() => {
     if (!guideId) {
@@ -195,28 +183,12 @@ export default function CreatorGuidePage() {
     [locations, pins]
   );
 
-  // Desktop message
-  if (!isMobile) {
-    return (
-      <div 
-        className={`flex flex-col items-center justify-center h-full-viewport ${inter.className}`}
-        style={{ backgroundColor: '#18204aff' }}
-      >
-        <p 
-          className="text-xl font-bold text-center px-6"
-          style={{ color: '#fdf5e2', fontWeight: 700 }}
-        >
-          Please view this page on a mobile device for the best experience.
-        </p>
-      </div>
-    );
-  }
-
   // Loading screen
   if (viewState === 'loading') {
     return (
+      <GuideViewportShell className={inter.className}>
       <div 
-        className={`flex flex-col items-center justify-center h-full-viewport ${inter.className}`}
+        className="flex min-h-[var(--vvh,100dvh)] w-full flex-1 flex-col items-center justify-center"
         style={{ backgroundColor: '#18204aff' }}
       >
         {/* Guide Logo - Only show if logo_url exists */}
@@ -270,11 +242,12 @@ export default function CreatorGuidePage() {
           <SVG2 />
         </div> */}
       </div>
+      </GuideViewportShell>
     );
   }
 
   // Map + optional video overlay (map stays mounted so camera is preserved when closing video)
-  if (isMobile && (viewState === 'map' || viewState === 'video')) {
+  if (viewState === 'map' || viewState === 'video') {
     // Convert guide to company data format for GuideMap component
     // Only show company logo pin if there's a company_id or logo_url (non-empty)
     // Prefer company_pin_coordinates for the logo pin position, fall back to guide.coordinates
@@ -292,7 +265,8 @@ export default function CreatorGuidePage() {
         : null;
 
     return (
-      <div className="guide-app-shell h-full-viewport relative flex flex-col">
+      <GuideViewportShell className={inter.className}>
+      <div className="guide-app-shell relative flex min-h-[var(--vvh,100dvh)] w-full flex-col">
         {/* Header Bar */}
         <div 
           className="relative z-[160] flex w-full flex-shrink-0 items-center justify-center pt-safe"
@@ -333,7 +307,7 @@ export default function CreatorGuidePage() {
           />
         </div>
         {viewState === 'video' && (
-          <div className="fixed inset-0 z-[200] bg-black">
+          <div className="absolute inset-0 z-[200] bg-black">
             <VideoSegmentPlayer
               location={selectedLocation}
               onClose={handleCloseVideo}
@@ -350,20 +324,23 @@ export default function CreatorGuidePage() {
           titleFontClassName={inter.className}
         />
       </div>
+      </GuideViewportShell>
     );
   }
 
   // Fallback if guideId is not available
   if (!guideId) {
     return (
+      <GuideViewportShell className={inter.className}>
       <div 
-        className={`flex flex-col items-center justify-center h-full-viewport ${inter.className}`}
+        className="flex min-h-[var(--vvh,100dvh)] w-full flex-1 flex-col items-center justify-center"
         style={{ backgroundColor: '#18204aff', color: '#fdf5e2' }}
       >
         <p className="text-xl font-bold text-center">
           Guide ID not found
         </p>
       </div>
+      </GuideViewportShell>
     );
   }
 
