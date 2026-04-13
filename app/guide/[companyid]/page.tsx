@@ -65,7 +65,6 @@ export default function GuidePage() {
 
     console.log('🔍 Looking for company:', companyId);
     console.log('🔍 Available companies:', companiesData);
-    console.log('🔍 Found company:', foundCompany);
 
     if (foundCompany) {
       setCompany(foundCompany);
