@@ -178,10 +178,13 @@ export default function CreatorGuidePage() {
     setViewState('map');
   };
 
-  const menuMapItems = useMemo(
-    () => [...locationsToMenuItems(locations), ...pinsToMenuItems(pins)],
-    [locations, pins]
-  );
+  const menuMapItems = useMemo(() => {
+    const pinItems = pinsToMenuItems(pins).map((item, index, arr) => ({
+      ...item,
+      separatorAfter: index === arr.length - 1 && locations.length > 0,
+    }));
+    return [...pinItems, ...locationsToMenuItems(locations)];
+  }, [locations, pins]);
 
   // Loading screen
   if (viewState === 'loading') {

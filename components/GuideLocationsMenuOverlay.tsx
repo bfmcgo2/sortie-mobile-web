@@ -106,7 +106,14 @@ export default function GuideLocationsMenuOverlay({
       >
         <ul className="mx-auto flex w-full max-w-lg flex-col items-center gap-5 pt-2">
           {items.map((item, index) => (
-            <li key={item.id} className="list-none w-full text-center">
+            <li
+              key={item.id}
+              className={`list-none w-full text-center ${
+                item.separatorAfter
+                  ? 'border-b border-[rgba(253,245,226,0.28)] pb-5'
+                  : ''
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => handlePick(item)}

@@ -568,12 +568,15 @@ export default function GuideMap({
                 }
                 if (cancelled) return;
 
+                // Custom pins are not clustered — always visible on the map.
+                marker.setMap(map);
+                marker.setZIndex(2000);
+
                 marker.addListener('click', () => {
                   if (onPinClick) onPinClick(pin);
                 });
 
                 pinRegularMarkersRef.current.push(marker);
-                clusterMarkers.push(marker);
               } catch (error: any) {
                 console.error(`❌ Error creating pin marker ${index}:`, error);
               }
@@ -610,10 +613,11 @@ export default function GuideMap({
                 }
 
                 const marker = new google.maps.marker.AdvancedMarkerElement({
-                  map: null,
+                  map,
                   position: { lat: pin.coordinates.lat, lng: pin.coordinates.lng },
                   title: pin.name,
                   content: root,
+                  zIndex: 2000,
                 });
 
                 marker.addListener('click', () => {
@@ -621,13 +625,13 @@ export default function GuideMap({
                 });
 
                 pinMarkersRef.current.push(marker);
-                clusterMarkers.push(marker);
               } catch (error: any) {
                 console.error(`❌ Error creating advanced pin marker ${index}:`, error);
               }
             });
           }
 
+          // Cluster only guide locations; custom pins stay outside the clusterer.
           if (clusterMarkers.length > 0) {
             markerClustererRef.current = new MarkerClusterer({
               map,
@@ -637,7 +641,7 @@ export default function GuideMap({
           }
         })();
       } else {
-        // No pins: cluster locations only (if any)
+        // No custom pins: cluster locations only (if any)
         if (clusterMarkers.length > 0) {
           markerClustererRef.current = new MarkerClusterer({
             map,
@@ -646,10 +650,6 @@ export default function GuideMap({
           });
         }
       }
-
-      // NOTE: MarkerClusterer instantiation happens above:
-      // - after pins are created (async) if pins exist
-      // - immediately if there are no pins
 
       // Create company pin marker from guide (if present) - Green color
       if (guide?.company_pin_coordinates) {

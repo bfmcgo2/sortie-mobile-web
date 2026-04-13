@@ -5,6 +5,8 @@ export type GuideMenuMapItem = {
   label: string;
   lat: number;
   lng: number;
+  /** When true, show a divider under this row (e.g. after the last custom pin before locations). */
+  separatorAfter?: boolean;
 };
 
 export function locationsToMenuItems(locations: GuideLocation[]): GuideMenuMapItem[] {
