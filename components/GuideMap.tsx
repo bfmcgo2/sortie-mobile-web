@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
-import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import { GuideMapClusterRenderer } from '@/lib/guideMapClusterRenderer';
 import { GuideLocation } from '@/lib/supabase';
 
 interface CompanyData {
@@ -116,7 +114,6 @@ export default function GuideMap({
   const pinRegularMarkersRef = useRef<google.maps.Marker[]>([]);
   const companyPinMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
   const companyMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
-  const markerClustererRef = useRef<MarkerClusterer | null>(null);
   const userLocationMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | google.maps.Marker | null>(null);
   const watchPositionIdRef = useRef<number | null>(null);
   const pinImagePreloadCacheRef = useRef<Map<string, Promise<boolean>>>(new Map());
@@ -393,15 +390,6 @@ export default function GuideMap({
       const hasAdvancedMarkerSupport = window.google?.maps?.marker?.AdvancedMarkerElement && hasMapId;
       console.log('🗺️ Marker useEffect - hasAdvancedMarkerSupport:', hasAdvancedMarkerSupport);
 
-      if (markerClustererRef.current) {
-        markerClustererRef.current.setMap(null);
-        markerClustererRef.current = null;
-      }
-
-      const clusterMarkers: Array<
-        google.maps.Marker | google.maps.marker.AdvancedMarkerElement
-      > = [];
-
       // Clear existing markers
       console.log('🗺️ Marker useEffect - clearing existing markers');
       markersRef.current.forEach(marker => marker.map = null);
@@ -423,6 +411,7 @@ export default function GuideMap({
           // Different styling for company pins vs video locations
           const isCompanyPin = location.isCompanyPin === true;
           const marker = new google.maps.Marker({
+            map,
             position: {
               lat: location.coordinates.lat,
               lng: location.coordinates.lng,
@@ -445,7 +434,6 @@ export default function GuideMap({
           });
 
           regularMarkersRef.current.push(marker);
-          clusterMarkers.push(marker);
           } catch (error: any) {
             console.error(`❌ Error creating marker ${index}:`, error);
             console.error('❌ Error stack:', error?.stack);
@@ -476,7 +464,7 @@ export default function GuideMap({
             }
             
             const marker = new google.maps.marker.AdvancedMarkerElement({
-              map: null,
+              map,
               position: {
                 lat: location.coordinates.lat,
                 lng: location.coordinates.lng,
@@ -492,7 +480,6 @@ export default function GuideMap({
             });
 
             markersRef.current.push(marker);
-            clusterMarkers.push(marker);
           } catch (error: any) {
             console.error(`❌ Error creating advanced marker ${index}:`, error);
             console.error('❌ Error stack:', error?.stack);
@@ -570,7 +557,7 @@ export default function GuideMap({
 
                 // Custom pins are not clustered — always visible on the map.
                 marker.setMap(map);
-                marker.setZIndex(2000);
+                marker.setZIndex(10000);
 
                 marker.addListener('click', () => {
                   if (onPinClick) onPinClick(pin);
@@ -617,7 +604,7 @@ export default function GuideMap({
                   position: { lat: pin.coordinates.lat, lng: pin.coordinates.lng },
                   title: pin.name,
                   content: root,
-                  zIndex: 2000,
+                  zIndex: 10000,
                 });
 
                 marker.addListener('click', () => {
@@ -631,24 +618,10 @@ export default function GuideMap({
             });
           }
 
-          // Cluster only guide locations; custom pins stay outside the clusterer.
-          if (clusterMarkers.length > 0) {
-            markerClustererRef.current = new MarkerClusterer({
-              map,
-              markers: clusterMarkers,
-              renderer: new GuideMapClusterRenderer(Boolean(mapId)),
-            });
-          }
+          // No clustering: locations and pins render as standalone markers.
         })();
       } else {
-        // No custom pins: cluster locations only (if any)
-        if (clusterMarkers.length > 0) {
-          markerClustererRef.current = new MarkerClusterer({
-            map,
-            markers: clusterMarkers,
-            renderer: new GuideMapClusterRenderer(Boolean(mapId)),
-          });
-        }
+        // No clustering: locations render as standalone markers.
       }
 
       // Create company pin marker from guide (if present) - Green color
@@ -920,10 +893,6 @@ export default function GuideMap({
 
     return () => {
       cancelled = true;
-      if (markerClustererRef.current) {
-        markerClustererRef.current.setMap(null);
-        markerClustererRef.current = null;
-      }
       markersRef.current.forEach(marker => marker.map = null);
       markersRef.current = [];
       regularMarkersRef.current.forEach(marker => marker.setMap(null));
