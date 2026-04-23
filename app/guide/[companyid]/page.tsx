@@ -170,10 +170,8 @@ export default function GuidePage() {
   if (viewState === 'loading') {
     return (
       <GuideViewportShell className={inter.className}>
-      <div 
-        className="flex min-h-[var(--vvh,100dvh)] w-full flex-1 flex-col items-center justify-center"
-        style={{ backgroundColor: '#18204aff' }}
-      >
+      <div className="min-h-[var(--vvh,100dvh)] w-full flex-1 px-safe" style={{ backgroundColor: '#18204aff' }}>
+        <div className="flex min-h-[var(--vvh,100dvh)] w-full flex-col items-center justify-center px-8 sm:px-12">
         {/* Company Logo - Only show when company data and image are ready */}
         {company && (
           <div 
@@ -206,7 +204,7 @@ export default function GuidePage() {
 
         {company && (
           <p
-            className="text-2xl font-bold text-center mb-6"
+            className="mx-auto max-w-lg text-2xl font-bold text-center mb-6"
             style={{ color: '#fdf5e2', fontWeight: 700 }}
           >
             {company.name} Guide
@@ -225,6 +223,7 @@ export default function GuidePage() {
         {/* <div className="mt-4 w-full max-w-xl">
           <SVG2 />
         </div> */}
+        </div>
       </div>
       </GuideViewportShell>
     );

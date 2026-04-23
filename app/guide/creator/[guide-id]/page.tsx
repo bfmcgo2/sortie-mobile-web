@@ -190,10 +190,8 @@ export default function CreatorGuidePage() {
   if (viewState === 'loading') {
     return (
       <GuideViewportShell className={inter.className}>
-      <div 
-        className="flex min-h-[var(--vvh,100dvh)] w-full flex-1 flex-col items-center justify-center"
-        style={{ backgroundColor: '#18204aff' }}
-      >
+      <div className="min-h-[var(--vvh,100dvh)] w-full flex-1 px-safe" style={{ backgroundColor: '#18204aff' }}>
+        <div className="flex min-h-[var(--vvh,100dvh)] w-full flex-col items-center justify-center px-8 sm:px-12">
         {/* Guide Logo - Only show if logo_url exists */}
         {guide && guide.logo_url && (
           <div 
@@ -225,7 +223,7 @@ export default function CreatorGuidePage() {
 
         {guide && (
           <p
-            className="text-2xl font-bold text-center mb-6"
+            className="mx-auto max-w-lg text-2xl font-bold text-center mb-6"
             style={{ color: '#fdf5e2', fontWeight: 700 }}
           >
             {guide.name} Guide
@@ -244,6 +242,7 @@ export default function CreatorGuidePage() {
         {/* <div className="mt-4 w-full max-w-xl">
           <SVG2 />
         </div> */}
+        </div>
       </div>
       </GuideViewportShell>
     );
